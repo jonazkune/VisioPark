@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e11" />
+  <title>ParkingAI · Pantaila</title>
+  <style>
+    :root {
+      --bg: #0b0e11;
+      --ink: #f4f1ea;
+      --muted: #9aa3ab;
+      --ok: #3d9a66;
+      --busy: #c45c4e;
+      --line: #243038;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+    body {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      min-height: 100dvh;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    header, footer {
+      padding: 8px 18px;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    main {
+      display: grid;
+      align-items: center;
+      justify-items: center;
+      padding: 8px 16px 12px;
+      min-height: 0;
+    }
+    .hero {
+      text-align: center;
+      max-width: 100%;
+    }
+    .count {
+      font-size: clamp(72px, 28vmin, 220px);
+      font-weight: 800;
+      line-height: 0.9;
+      font-variant-numeric: tabular-nums;
+      color: var(--ok);
+    }
+    body.full .count { color: var(--busy); }
+    body.down .count { color: var(--muted); }
+    .label {
+      margin-top: 8px;
+      font-size: clamp(18px, 4.8vmin, 36px);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .sub {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: clamp(13px, 2.2vmin, 18px);
+    }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      border-top: 1px solid var(--line);
+    }
+    .err { color: var(--busy); }
+  </style>
+</head>
+<body>
+  <header id="name">ParkingAI</header>
+  <main>
+    <div class="hero">
+      <div class="count" id="free">—</div>
+      <div class="label" id="label">plaza libre</div>
+      <div class="sub" id="sub">Kargatzen…</div>
+    </div>
+  </main>
+  <footer>
+    <span id="stamp">—</span>
+    <span id="totals">—</span>
+  </footer>
+  <script>
+    const token = new URLSearchParams(location.search).get("t") || "";
+    const freeEl = document.getElementById("free");
+    const labelEl = document.getElementById("label");
+    const subEl = document.getElementById("sub");
+    const nameEl = document.getElementById("name");
+    const stampEl = document.getElementById("stamp");
+    const totalsEl = document.getElementById("totals");
+    let busy = false;
+
+    function clock(iso) {
+      if (!iso) return "orain";
+      const dt = new Date(iso);
+      if (Number.isNaN(dt.getTime())) return "orain";
+      return dt.toLocaleTimeString("eu-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    async function tick() {
+      if (!token || busy || document.hidden) return;
+      busy = true;
+      try {
+        const res = await fetch("/display/" + encodeURIComponent(token), { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Ezin da egoera irakurri");
+        const free = Number(data.free || 0);
+        const occupied = Number(data.occupied || 0);
+        const total = Number(data.total || 0);
+        const running = data.ok !== false;
+        document.body.classList.toggle("full", running && free === 0 && total > 0);
+        document.body.classList.toggle("down", !running);
+        nameEl.textContent = data.name || "ParkingAI";
+        freeEl.textContent = running ? String(free) : "—";
+        labelEl.textContent = !running ? "ez dago martxan" : (free === 0 ? "beteta" : (free === 1 ? "plaza libre" : "plaza libre"));
+        subEl.textContent = running ? (occupied + " okupatu") : (data.error || "Itxaron administratzaileari.");
+        subEl.classList.toggle("err", !running);
+        stampEl.textContent = clock(data.updated_at);
+        totalsEl.textContent = total ? (total + " plaza") : "";
+      } catch (e) {
+        document.body.classList.add("down");
+        freeEl.textContent = "—";
+        labelEl.textContent = "konexioa gabe";
+        subEl.textContent = e.message || "Sarea falta da";
+        subEl.classList.add("err");
+      } finally {
+        busy = false;
+      }
+    }
+
+    if (!token) {
+      document.body.classList.add("down");
+      freeEl.textContent = "—";
+      labelEl.textContent = "esteka falta";
+      subEl.textContent = "Administratzaileak pantaila-esteka sortu behar du.";
+    } else {
+      tick();
+      setInterval(tick, 500);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+    }
+  </script>
+</body>
+</html>

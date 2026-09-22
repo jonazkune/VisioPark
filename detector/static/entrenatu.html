@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParkingAI · Entrenamendua</title>
+  <link rel="stylesheet" href="/ui/theme.css" />
+  <style>
+    html, body { height: 100%; }
+    body.tech {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100dvh;
+      overflow: hidden;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 360px);
+      min-height: 0;
+    }
+    .cam-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+    }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .toolbar select { width: auto; min-width: 160px; }
+    #stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #0a0c0e;
+      overflow: hidden;
+    }
+    #viewport { position: relative; width: 100%; transform-origin: 0 0; }
+    #viewport img { width: 100%; display: block; user-select: none; pointer-events: none; }
+    #overlay { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+    .cam-status {
+      padding: 6px 8px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 28px;
+    }
+    .tools { overflow: auto; background: var(--bg); min-height: 0; }
+    .panel {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px 12px;
+    }
+    .panel h2 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    .panel p, .panel .hint { font-size: 12px; margin: 6px 0; }
+    .spaces { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .space {
+      padding: 2px 7px;
+      border-radius: 3px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--mono);
+      font-weight: 600;
+    }
+    .space.on { border-color: var(--ink); }
+    .space.free { background: rgba(61,154,102,0.25); border-color: var(--ok); }
+    .space.busy { background: rgba(196,92,78,0.3); border-color: var(--busy); }
+    .queue { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
+    .queue button {
+      justify-content: flex-start;
+      font-family: var(--mono);
+      font-size: 11px;
+      min-height: 26px;
+    }
+    .queue button.current { border-color: var(--accent); }
+    .rel-spaces { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .rel-chip {
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 2px 6px;
+      border: 1px solid var(--border);
+      background: var(--elevated);
+    }
+    .rel-chip.ok { color: var(--ok); border-color: var(--ok); }
+    .rel-chip.mid { color: var(--warn); border-color: var(--warn); }
+    .rel-chip.bad { color: var(--busy); border-color: var(--busy); }
+    @media (max-width: 900px) {
+      body.tech { height: auto; overflow: auto; }
+      main { grid-template-columns: 1fr; }
+      #stage { height: 46vh; flex: none; }
+    }
+  </style>
+</head>
+<body class="tech">
+  <header class="topbar">
+    <a class="brand" href="/">ParkingAI</a>
+    <span class="crumb">Entrenamendua</span>
+    <span class="spacer"></span>
+    <nav class="row">
+      <a class="btn ghost" href="/">Menua</a>
+      <a class="btn ghost" id="toConfig" href="/konfigurazioa">Konfigurazioa</a>
+      <a class="btn ghost" id="toStatus" href="/egoera">Egoera</a>
+      <a class="btn ghost" id="toReliability" href="/fidagarritasuna">Fidagarritasuna</a>
+    </nav>
+  </header>
+  <main>
+    <section class="cam-col">
+      <div class="toolbar">
+        <select id="parkingId" aria-label="Aparkalekua"></select>
+        <button class="ghost" type="button" id="btnOverlay">Poliedroak: beteta</button>
+        <button class="ghost" type="button" onclick="zoomBy(1.25)">+</button>
+        <button class="ghost" type="button" onclick="zoomBy(0.8)">−</button>
+        <button class="ghost" type="button" onclick="resetView()">1×</button>
+      </div>
+      <div id="stage">
+        <div id="viewport">
+          <img id="view" alt="Entrenamendu irudia" draggable="false" />
+          <canvas id="overlay"></canvas>
+        </div>
+      </div>
+      <p class="cam-status" id="status">Irudiak bildu eta plaza bakoitza markatu.</p>
+    </section>
+    <aside class="tools">
+      <div class="panel">
+        <h2>Nola ikasten duen</h2>
+        <p>Bufferrean irudiak pilatzen dira. <b style="color:var(--ink)">Bistan dagoen irudia bakarrik</b> bidaltzen da. Plaza guztiak gorri edo berde joan behar dira: markatu gabeak <b style="color:var(--ink)">libre</b> bezala sartzen dira. Okupatuta daudenak klikatu gorri jartzeko, gero bidali.</p>
+      </div>
+      <div class="panel">
+        <h2>Irudi hau</h2>
+        <p id="frameMeta">Irudirik ez.</p>
+        <div class="row" style="margin-top:6px">
+          <button type="button" onclick="grabNow()">Hartu irudi hau</button>
+          <button class="ghost" type="button" onclick="loadQueue()">Kargatu bufferra</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button type="button" onclick="confirmFrame()">Bidali entrenatzera</button>
+          <button class="ghost" type="button" onclick="nextFrame()">Hurrengoa</button>
+        </div>
+        <p class="notice" id="learnNotice">Bidali ondoren hemen agertuko da modeloak ikasi duen ala ez.</p>
+        <p class="status" id="model">Modeloa: —</p>
+      </div>
+      <div class="panel">
+        <h2>Fidagarritasuna</h2>
+        <p id="relHeadline">Entrenamenduak bidali ondoren agertuko da asmatze-tasa.</p>
+        <p class="hint" id="relTrend"></p>
+        <div class="rel-spaces" id="relSpaces"></div>
+        <p style="margin-top:8px"><a class="btn ghost" id="toReliabilityPanel" href="/fidagarritasuna">Txosten osoa</a></p>
+      </div>
+      <div class="panel">
+        <h2>Plazak irudi honetan</h2>
+        <p class="hint">Klikatu irudian edo zerrendan egoera aldatzeko. Berde = libre, gorri = okupatu. Poliedroak ezkuta ditzakezu kotxea ikusteko.</p>
+        <div class="spaces" id="spaceList"></div>
+      </div>
+      <div class="panel">
+        <h2>Bufferra</h2>
+        <p class="hint">Klikatu irudi bat bistan jartzeko. Entrenamendura ez da joango Bidali sakatu arte.</p>
+        <p class="status" id="trainStatus">0 irudi zain</p>
+        <div class="queue" id="queue"></div>
+      </div>
+    </aside>
+  </main>
+  <script src="/ui/app.js"></script>
+  <script>
+    const parkingId = () => document.getElementById("parkingId").value.trim();
+    const statusEl = document.getElementById("status");
+    const stage = document.getElementById("stage");
+    const viewport = document.getElementById("viewport");
+    const view = document.getElementById("view");
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+    const OVERLAY_KEY = "parkingai_overlay";
+    const OVERLAY_LABEL = { fill: "beteta", outline: "ertza", off: "ezkutuan" };
+    let overlayMode = localStorage.getItem(OVERLAY_KEY) || "fill";
+    let spaces = [];
+    let occupancy = {};
+    let selected = null;
+    let scale = 1, tx = 0, ty = 0, panning = false, didPan = false, panX = 0, panY = 0;
+    let pending = [];
+    let pendingIndex = 0;
+    let currentFrame = null;
+    let live = true;
+    let samplesFree = 0, samplesOccupied = 0, modelTrained = false, modelAccuracy = null;
+
+    function setStatus(text) { statusEl.textContent = text; }
+    function applyLearnNotice(data, fallback) {
+      const el = document.getElementById("learnNotice");
+      const text = (data && data.message) || fallback || el.textContent;
+      const kind = (data && data.kind) || (data && data.learned ? "ok" : "warn");
+      el.textContent = text;
+      el.className = "notice" + (kind ? " " + kind : "");
+      setStatus(text);
+    }
+    function syncOverlayButton() {
+      const btn = document.getElementById("btnOverlay");
+      btn.textContent = "Poliedroak: " + (OVERLAY_LABEL[overlayMode] || overlayMode);
+      btn.setAttribute("aria-pressed", overlayMode !== "off" ? "true" : "false");
+    }
+    function cycleOverlay() {
+      overlayMode = overlayMode === "fill" ? "outline" : overlayMode === "outline" ? "off" : "fill";
+      localStorage.setItem(OVERLAY_KEY, overlayMode);
+      syncOverlayButton();
+      draw();
+    }
+    function applyView() { viewport.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; }
+    function zoomBy(factor, cx, cy) {
+      const rect = stage.getBoundingClientRect();
+      const mx = cx == null ? rect.width / 2 : cx;
+      const my = cy == null ? rect.height / 2 : cy;
+      const next = Math.min(8, Math.max(1, scale * factor));
+      const wx = (mx - tx) / scale, wy = (my - ty) / scale;
+      scale = next;
+      tx = mx - wx * scale;
+      ty = my - wy * scale;
+      if (scale === 1) { tx = 0; ty = 0; }
+      applyView();
+      draw();
+    }
+    function resetView() { scale = 1; tx = 0; ty = 0; applyView(); draw(); }
+    function localPoint(e) {
+      const r = canvas.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (canvas.width / Math.max(1, r.width)), y: (e.clientY - r.top) * (canvas.height / Math.max(1, r.height)) };
+    }
+    function toCanvas(pt) { return { x: pt.x * canvas.width, y: pt.y * canvas.height }; }
+    function pointInPoly(pt, points) {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = toCanvas(points[i]), b = toCanvas(points[j]);
+        const hit = ((a.y > pt.y) !== (b.y > pt.y)) && (pt.x < (b.x - a.x) * (pt.y - a.y) / ((b.y - a.y) || 1e-6) + a.x);
+        if (hit) inside = !inside;
+      }
+      return inside;
+    }
+    function markerSize() {
+      return { line: Math.max(0.7, 2 / scale), point: Math.max(1.1, 4.5 / scale), font: Math.max(8, 14 / scale) };
+    }
+    function drawPoly(points, fill, stroke, selected) {
+      if (!points || !points.length) return;
+      const size = markerSize();
+      ctx.beginPath();
+      const first = toCanvas(points[0]);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < points.length; i++) {
+        const p = toCanvas(points[i]);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) {
+        ctx.strokeStyle = selected ? "#fff" : stroke;
+        ctx.lineWidth = selected ? size.line + 1.2 / scale : size.line;
+        ctx.stroke();
+      }
+    }
+    function drawLabel(s) {
+      const p = toCanvas(s.points[0]);
+      const font = "bold " + markerSize().font + "px sans-serif";
+      ctx.font = font;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(s.id, p.x + 6 / scale, p.y - 8 / scale);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(s.id, p.x + 6 / scale, p.y - 8 / scale);
+    }
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      spaces.forEach((s) => {
+        const busy = occupancy[s.id] === true;
+        const free = occupancy[s.id] === false;
+        const isSel = selected === s.id;
+        if (overlayMode === "off") {
+          if (isSel) drawPoly(s.points, null, "rgba(255,255,255,0.55)", true);
+          return;
+        }
+        const fill = overlayMode === "fill"
+          ? (busy ? "rgba(212,91,74,0.35)" : (free ? "rgba(60,175,111,0.35)" : "rgba(42,167,161,0.22)"))
+          : null;
+        const stroke = busy ? "#d45b4a" : (free ? "#3caf6f" : "#9aa7ad");
+        drawPoly(s.points, fill, stroke, isSel);
+        drawLabel(s);
+      });
+    }
+    function syncCanvas() {
+      const w = Math.max(1, view.clientWidth), h = Math.max(1, view.clientHeight);
+      if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+      draw();
+    }
+    view.onload = syncCanvas;
+    window.addEventListener("resize", () => { resetView(); syncCanvas(); });
+
+    function renderSpaces() {
+      const box = document.getElementById("spaceList");
+      box.innerHTML = "";
+      spaces.forEach((s) => {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "space" + (selected === s.id ? " on" : "") + (occupancy[s.id] === true ? " busy" : (occupancy[s.id] === false ? " free" : ""));
+        el.textContent = s.id;
+        el.onclick = () => flipSpace(s.id);
+        box.appendChild(el);
+      });
+    }
+    function pct(value) {
+      if (value == null || Number.isNaN(value)) return "—";
+      return Math.round(value * 1000) / 10 + "%";
+    }
+    function tone(value) {
+      if (value == null) return "";
+      if (value >= 0.85) return "ok";
+      if (value >= 0.65) return "mid";
+      return "bad";
+    }
+    function paintReliability(data) {
+      const box = document.getElementById("relSpaces");
+      const head = document.getElementById("relHeadline");
+      const trend = document.getElementById("relTrend");
+      if (!head) return;
+      if (!data || !data.checks) {
+        head.textContent = "Entrenamenduak bidali ondoren agertuko da asmatze-tasa.";
+        if (trend) trend.textContent = "";
+        if (box) box.innerHTML = "";
+        return;
+      }
+      const label = data.trend === "hobetzen" ? "sistema hobetzen ari da"
+        : (data.trend === "okertzen" ? "sistema okertzen ari da"
+        : (data.trend === "egonkor" ? "tasa egonkor dago" : "oraindik datu gutxi joera ikusteko"));
+      head.textContent = pct(data.accuracy) + " asmatze · " + data.hits + "/" + data.checks + " plaza-egiaztapen";
+      if (trend) {
+        trend.textContent = "Azken irudiak: " + pct(data.recent_accuracy) + " · " + label + ".";
+      }
+      if (box) {
+        box.innerHTML = "";
+        (data.spaces || []).slice(0, 18).forEach((row) => {
+          const el = document.createElement("span");
+          el.className = "rel-chip " + tone(row.accuracy);
+          el.textContent = row.id + " " + pct(row.accuracy);
+          box.appendChild(el);
+        });
+      }
+    }
+    async function loadReliability() {
+      if (!parkingId()) return;
+      try {
+        const data = await api("/dataset/reliability?parking_id=" + encodeURIComponent(parkingId()));
+        paintReliability(data);
+      } catch (_) {}
+    }
+    function updateModel() {
+      const trained = modelTrained
+        ? (modelAccuracy != null ? "entrenatuta (" + modelAccuracy + ")" : "entrenatuta")
+        : "oraindik gabe";
+      document.getElementById("model").textContent =
+        `Adibideak: ${samplesFree} libre, ${samplesOccupied} okupatu · modelo ${trained}`;
+    }
+    function applyStats(data) {
+      samplesFree = data.samples_free ?? samplesFree;
+      samplesOccupied = data.samples_occupied ?? samplesOccupied;
+      modelTrained = data.model_trained === true;
+      if (data.accuracy != null) modelAccuracy = data.accuracy;
+      const n = (data.pending_count != null) ? data.pending_count : pending.length;
+      const status = document.getElementById("trainStatus");
+      if (status) {
+        status.textContent = n + " irudi zain" +
+          (data.buffer_size != null ? ` · buffer ${data.buffer_size}/${data.buffer_target || 10}` : "");
+      }
+      updateModel();
+    }
+    function fillOccupancy(src) {
+      const map = {};
+      spaces.forEach((s) => { map[s.id] = src && src[s.id] === true; });
+      return map;
+    }
+    function occupancyCounts() {
+      let free = 0, busy = 0;
+      spaces.forEach((s) => { if (occupancy[s.id] === true) busy += 1; else free += 1; });
+      return { free, busy };
+    }
+    function flipSpace(id) {
+      occupancy[id] = occupancy[id] !== true;
+      selected = id;
+      renderSpaces();
+      draw();
+      const n = occupancyCounts();
+      setStatus(id + " → " + (occupancy[id] ? "OKUPATUTA" : "LIBRE") +
+        ". Irudi honetan: " + n.free + " libre, " + n.busy + " okupatu. Bidali entrenatzera.");
+    }
+    function showLive() {
+      live = true;
+      currentFrame = null;
+      if (!parkingId()) return;
+      if (view._blobUrl) {
+        URL.revokeObjectURL(view._blobUrl);
+        view._blobUrl = "";
+      }
+      view.src = "/live?parking_id=" + encodeURIComponent(parkingId()) + "&t=" + Date.now();
+      document.getElementById("frameMeta").textContent = "Kamera zuzena. Hartu irudi bat, edo aukeratu bat buffertik.";
+      setStatus("Kamera zuzena. Hartu irudi hau, edo ireki bufferreko bat.");
+    }
+    function showFrame(frame) {
+      live = false;
+      currentFrame = frame;
+      occupancy = fillOccupancy(frame.spaces || frame.yolo_spaces || {});
+      authImage(view, "/dataset/image?parking_id=" + encodeURIComponent(parkingId()) + "&frame_id=" + encodeURIComponent(frame.id));
+      const when = (frame.created_at || "").replace("T", " ").slice(0, 19);
+      document.getElementById("frameMeta").textContent =
+        (pendingIndex + 1) + "/" + Math.max(1, pending.length) + " · " + (when || frame.id) + " · " + (frame.source || "");
+      renderSpaces();
+      draw();
+      renderQueue();
+      setStatus("Bistan: irudi hau. Zuzendu nahi baduzu, gero 'Bidali entrenatzera'. Gainerakoak ez dira joango.");
+    }
+    function renderQueue() {
+      const box = document.getElementById("queue");
+      if (!box) return;
+      box.innerHTML = "";
+      pending.forEach((frame, i) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ghost" + (i === pendingIndex ? " current" : "");
+        const when = (frame.created_at || "").replace("T", " ").slice(11, 19);
+        btn.textContent = (i + 1) + " · " + (when || frame.id.slice(-8));
+        btn.onclick = () => { pendingIndex = i; showFrame(pending[i]); };
+        box.appendChild(btn);
+      });
+    }
+    async function loadQueue() {
+      const data = await api("/dataset/pending?parking_id=" + encodeURIComponent(parkingId()));
+      pending = data.pending || data.frames || [];
+      pendingIndex = 0;
+      applyStats(data);
+      renderQueue();
+      if (pending.length) showFrame(pending[0]);
+      else showLive();
+    }
+    async function grabNow() {
+      try {
+        const data = await api("/dataset/grab", {
+          method: "POST",
+          body: JSON.stringify({ parking_id: parkingId() })
+        });
+        applyStats(data);
+        await loadQueue();
+        if (data.frame) {
+          const idx = pending.findIndex((row) => row.id === data.frame.id);
+          pendingIndex = idx >= 0 ? idx : pending.length - 1;
+          if (pending[pendingIndex]) showFrame(pending[pendingIndex]);
+        }
+        setStatus("Irudia bufferrean eta bistan. Zuzendu eta bidali entrenatzera irudi hau bakarrik.");
+      } catch (e) { setStatus(e.message); }
+    }
+    async function confirmFrame() {
+      if (!currentFrame) {
+        applyLearnNotice({
+          message: "Lehenik hartu irudi bat edo aukeratu bat buffertik. Bistan dagoena bakarrik bidaltzen da.",
+          kind: "warn"
+        });
+        return;
+      }
+      try {
+        occupancy = fillOccupancy(occupancy);
+        const n = occupancyCounts();
+        const data = await api("/dataset/review", {
+          method: "POST",
+          body: JSON.stringify({ parking_id: parkingId(), frame_id: currentFrame.id, spaces: occupancy })
+        });
+        applyLearnNotice(data, "Bistan zegoen irudia entrenamendura bidali da (" + n.free + " libre, " + n.busy + " okupatu). Gainerakoak bufferrean jarraitzen dute.");
+        applyStats(data);
+        if (data.reliability) paintReliability(data.reliability);
+        else await loadReliability();
+        pending.splice(pendingIndex, 1);
+        if (pendingIndex >= pending.length) pendingIndex = Math.max(0, pending.length - 1);
+        renderQueue();
+        if (pending.length) showFrame(pending[pendingIndex]);
+        else showLive();
+      } catch (e) {
+        applyLearnNotice({ message: e.message, kind: "bad" });
+      }
+    }
+    function nextFrame() {
+      if (!pending.length) { loadQueue(); return; }
+      pendingIndex = (pendingIndex + 1) % pending.length;
+      showFrame(pending[pendingIndex]);
+    }
+    async function loadParking() {
+      if (!parkingId()) return;
+      const pid = parkingId();
+      document.getElementById("toConfig").href = "/konfigurazioa?parking_id=" + encodeURIComponent(pid);
+      document.getElementById("toStatus").href = "/egoera?parking_id=" + encodeURIComponent(pid);
+      document.getElementById("toReliability").href = "/fidagarritasuna?parking_id=" + encodeURIComponent(pid);
+      const panelLink = document.getElementById("toReliabilityPanel");
+      if (panelLink) panelLink.href = "/fidagarritasuna?parking_id=" + encodeURIComponent(pid);
+      const data = await api("/parking?parking_id=" + encodeURIComponent(pid));
+      spaces = data.spaces || [];
+      occupancy = data.occupancy || {};
+      applyStats(data);
+      renderSpaces();
+      await loadQueue();
+      await loadReliability();
+    }
+
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button === 1 || e.button === 2 || e.shiftKey) {
+        panning = true; didPan = false; panX = e.clientX; panY = e.clientY; e.preventDefault();
+      }
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!panning) return;
+      tx += e.clientX - panX; ty += e.clientY - panY; panX = e.clientX; panY = e.clientY; didPan = true; applyView();
+    });
+    window.addEventListener("mouseup", () => { panning = false; });
+    canvas.addEventListener("click", (e) => {
+      if (didPan) { didPan = false; return; }
+      const pt = localPoint(e);
+      for (let i = spaces.length - 1; i >= 0; i--) {
+        if (pointInPoly(pt, spaces[i].points)) { flipSpace(spaces[i].id); return; }
+      }
+    });
+    stage.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const rect = stage.getBoundingClientRect();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+    document.getElementById("btnOverlay").onclick = cycleOverlay;
+    document.getElementById("parkingId").onchange = () => loadParking();
+    window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT")) return;
+      if (e.key === "p" || e.key === "P") { e.preventDefault(); cycleOverlay(); }
+      if ((e.key === "l" || e.key === "L") && selected) { e.preventDefault(); occupancy[selected] = false; renderSpaces(); draw(); }
+      if ((e.key === "o" || e.key === "O") && selected) { e.preventDefault(); occupancy[selected] = true; renderSpaces(); draw(); }
+      if (e.key === "Enter") { e.preventDefault(); confirmFrame(); }
+    });
+    setInterval(() => {
+      if (live && parkingId() && !document.hidden && view.src && view.src.indexOf("/live") < 0) {
+        view.src = "/live?parking_id=" + encodeURIComponent(parkingId()) + "&t=" + Date.now();
+      }
+    }, 8000);
+
+    async function boot() {
+      try {
+        const me = await api("/auth/me");
+        setCurrentUser(me.user);
+      } catch (e) { location.href = "/"; return; }
+      const data = await api("/parkings");
+      const select = document.getElementById("parkingId");
+      const params = new URLSearchParams(location.search);
+      select.innerHTML = "";
+      (data.parkings || []).forEach((p) => {
+        if (!canEditParking(p)) return;
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name || p.id;
+        select.appendChild(opt);
+      });
+      if (!select.options.length) {
+        location.href = "/egoera";
+        return;
+      }
+      if (params.get("parking_id")) select.value = params.get("parking_id");
+      syncOverlayButton();
+      await loadParking();
+    }
+    boot().catch((e) => setStatus(e.message));
+  </script>
+</body>
+</html>

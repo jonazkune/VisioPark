@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParkingAI</title>
+  <link rel="stylesheet" href="/ui/theme.css" />
+  <style>
+    body.home { min-height: 100vh; }
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 16px 32px;
+      min-height: calc(100dvh - 44px);
+      display: flex;
+      flex-direction: column;
+    }
+    #loginBox {
+      max-width: 400px;
+      margin: 56px auto 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 20px;
+    }
+    #loginBox h2 {
+      margin-bottom: 6px;
+      font-size: 16px;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    #loginBox .lead { margin-bottom: 14px; font-size: 13px; }
+    #loginBox .wide { width: 100%; min-height: 34px; margin-top: 14px; }
+    .pass-wrap { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+    .pass-wrap input { margin: 0; }
+    .login-links { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .linkish {
+      background: none;
+      border: 0;
+      color: var(--accent);
+      padding: 0;
+      min-height: auto;
+      font-weight: 600;
+      text-transform: none;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .linkish:hover { text-decoration: underline; filter: none; }
+    .hint { font-size: 12px; margin-top: 12px; }
+    .meter { display: flex; gap: 4px; margin-top: 6px; }
+    .meter i { flex: 1; height: 3px; background: var(--border); }
+    .meter.weak i:nth-child(-n+1) { background: var(--busy); }
+    .meter.ok i:nth-child(-n+2) { background: var(--warn); }
+    .meter.strong i { background: var(--ok); }
+    #appBox { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .app-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .app-head h2 {
+      font-size: 15px;
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .dash-tools {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    #parkingSearch {
+      width: min(360px, 100%);
+      min-height: 32px;
+      padding: 6px 10px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      color: var(--ink);
+    }
+    .dash-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+    .dash-stats span {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 5px 9px;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .grid {
+      flex: 1;
+      display: grid;
+      gap: 10px;
+      min-height: 0;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      align-content: start;
+    }
+    .lot-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .lot-card .meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .lot-card h3 { font-size: 15px; }
+    .lot-card .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .stat {
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 10px;
+    }
+    .stat b {
+      display: block;
+      font-size: 28px;
+      font-weight: 600;
+      font-family: var(--mono);
+      color: var(--ink);
+      line-height: 1;
+    }
+    .stat.ok b { color: var(--ok); }
+    .stat.busy b { color: var(--busy); }
+    .stat span {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .lot-card > p { font-size: 12px; }
+    .lot-card .row { margin-top: auto; }
+    .fav {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      min-width: 32px;
+      padding: 0 8px;
+      font-size: 14px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .fav.on { color: var(--accent); border-color: var(--accent); }
+    .empty-panel {
+      grid-column: 1 / -1;
+      border: 1px dashed var(--border);
+      background: var(--surface);
+      padding: 28px 18px;
+    }
+    .empty-panel h3 { margin-bottom: 6px; font-size: 14px; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(6, 8, 10, 0.72);
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 48px 16px 16px;
+      overflow: auto;
+      z-index: 20;
+    }
+    .dialog {
+      width: min(480px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 16px;
+    }
+    .dialog-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .priv-row {
+      display: grid;
+      grid-template-columns: 1fr 160px;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body class="home tech">
+  <header class="topbar">
+    <a class="brand" href="/">ParkingAI</a>
+    <nav class="main-nav hidden" id="mainNav">
+      <a href="/" id="navMine">Zure aparkalekuak</a>
+      <a href="/aparkalekuak" id="navAll">Aparkaleku guztiak</a>
+    </nav>
+    <span class="crumb" id="crumb">Aparkalekuak</span>
+    <span class="spacer"></span>
+    <div id="who"></div>
+  </header>
+  <div class="wrap">
+    <section id="loginBox">
+      <div id="loginPanel">
+        <h2>Saioa hasi</h2>
+        <p class="lead">Korreoa edo erabiltzailea. Gidariak plaza libreak ikusten ditu; kameraren irudia administratzaileentzat da.</p>
+        <form id="loginForm">
+          <label for="username">Korreoa edo erabiltzailea</label>
+          <input id="username" name="username" autocomplete="username" required maxlength="80" />
+          <label for="password">Pasahitza</label>
+          <div class="pass-wrap">
+            <input id="password" name="password" type="password" autocomplete="current-password" required />
+            <button type="button" class="ghost" data-toggle="password">Erakutsi</button>
+          </div>
+          <button type="submit" class="wide">Sartu</button>
+        </form>
+        <div class="login-links">
+          <button type="button" class="linkish" id="btnSignup">Kontua sortu</button>
+          <button type="button" class="linkish" id="btnForgot">Pasahitza ahaztu dut</button>
+          <button type="button" class="linkish" id="btnResend">Berrespena berriro bidali</button>
+        </div>
+        <p class="hint">Orain korreoa ez da Gmail-era joango (SMTP gabe). Berrespena pantailako estekarekin egiten da.</p>
+        <p class="status" id="loginStatus"></p>
+      </div>
+      <div id="signupPanel" class="hidden">
+        <h2>Kontua sortu</h2>
+        <p class="lead">Korreoa berretsi ondoren hasiko duzu saioa. Udaletxeko parking publikoak berehala ikusiko dituzu.</p>
+        <form id="signupForm">
+          <label for="signupEmail">Korreoa</label>
+          <input id="signupEmail" type="email" autocomplete="email" required maxlength="80" />
+          <label for="signupName">Izena (aukerakoa)</label>
+          <input id="signupName" autocomplete="name" maxlength="80" />
+          <label for="signupPass">Pasahitza</label>
+          <div class="pass-wrap">
+            <input id="signupPass" type="password" autocomplete="new-password" minlength="12" required />
+            <button type="button" class="ghost" data-toggle="signupPass">Erakutsi</button>
+          </div>
+          <div class="meter" id="signupMeter" aria-hidden="true"><i></i><i></i><i></i></div>
+          <p class="hint" id="signupHint"></p>
+          <label for="signupPass2">Errepikatu</label>
+          <input id="signupPass2" type="password" autocomplete="new-password" minlength="12" required />
+          <button type="submit" class="wide">Erregistratu</button>
+        </form>
+        <div class="login-links">
+          <button type="button" class="linkish" id="btnBackFromSignup">Saioa hasi</button>
+        </div>
+        <p class="status" id="signupStatus"></p>
+      </div>
+      <div id="forgotPanel" class="hidden">
+        <h2>Pasahitza berreskuratu</h2>
+        <p class="lead">Esteka korreoz joango da. Kontuak oraindik korreorik ez badu, idatzi hemen lehen aldiz lotzeko.</p>
+        <form id="forgotForm">
+          <label for="forgotIdentity">Korreoa edo erabiltzailea</label>
+          <input id="forgotIdentity" autocomplete="username" required maxlength="80" />
+          <label for="forgotEmail">Korreoa</label>
+          <input id="forgotEmail" type="email" autocomplete="email" placeholder="izu@enpresa.eus" />
+          <button type="submit" class="wide">Bidali esteka</button>
+        </form>
+        <div class="login-links">
+          <button type="button" class="linkish" id="btnBackLogin">Saioa hasi</button>
+        </div>
+        <p class="status" id="forgotStatus"></p>
+      </div>
+      <div id="resetPanel" class="hidden">
+        <h2 id="resetTitle">Pasahitz berria</h2>
+        <p class="lead" id="resetLead">Aukeratu pasahitz sendo bat. Gutxienez 12 karaktere, maiuskula, minuskula eta zenbaki bat.</p>
+        <form id="resetForm">
+          <label for="resetPass">Pasahitz berria</label>
+          <div class="pass-wrap">
+            <input id="resetPass" type="password" autocomplete="new-password" minlength="12" required />
+            <button type="button" class="ghost" data-toggle="resetPass">Erakutsi</button>
+          </div>
+          <div class="meter" id="resetMeter" aria-hidden="true"><i></i><i></i><i></i></div>
+          <p class="hint" id="resetHint"></p>
+          <label for="resetPass2">Errepikatu</label>
+          <input id="resetPass2" type="password" autocomplete="new-password" minlength="12" required />
+          <button type="submit" class="wide" id="resetSubmit">Gorde eta sartu</button>
+        </form>
+        <p class="status" id="resetStatus"></p>
+      </div>
+    </section>
+
+    <section id="appBox" class="hidden">
+      <div class="app-head">
+        <div>
+          <h2 id="hello">Zure aparkalekuak</h2>
+          <p id="helloSub"></p>
+        </div>
+        <div class="row" id="adminActions"></div>
+      </div>
+      <div class="dash-tools">
+        <input id="parkingSearch" type="search" placeholder="Bilatu aparkalekua…" autocomplete="off" />
+        <div class="dash-stats">
+          <span id="lotCount">0 aparkaleku</span>
+          <span id="lotFree">0 libre</span>
+          <span id="lotBusy">0 okupatu</span>
+        </div>
+      </div>
+      <div class="grid" id="parkingGrid"></div>
+    </section>
+    <p class="status" id="status"></p>
+  </div>
+
+  <div id="createOverlay" class="overlay hidden" onclick="backdropClose(event, hideCreate)">
+    <div class="dialog" role="dialog" aria-labelledby="createTitle">
+      <div class="dialog-head">
+        <h2 id="createTitle">Aparkaleku berria</h2>
+        <button class="ghost" type="button" onclick="hideCreate()">Itxi</button>
+      </div>
+      <label>Izena</label>
+      <input id="newName" placeholder="Proba ofiziala" />
+      <label>ID (aukerakoa)</label>
+      <input id="newId" placeholder="proba-ofiziala" />
+      <label>Kamera URL</label>
+      <input id="newCamera" placeholder="http://...jpg edo rtsp://..." />
+      <label>Ikusgarritasuna</label>
+      <select id="newVisibility">
+        <option value="public" selected>Publikoa (saioa duen edonork ikusten du)</option>
+        <option value="private">Pribatua (pribilegioa behar da)</option>
+      </select>
+      <div class="row" style="margin-top:12px">
+        <button type="button" onclick="createParking()">Gorde</button>
+        <button class="ghost" type="button" onclick="hideCreate()">Utzi</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="newUserOverlay" class="overlay hidden" onclick="backdropClose(event, hideNewUser)">
+    <div class="dialog" role="dialog" aria-labelledby="newUserTitle">
+      <div class="dialog-head">
+        <h2 id="newUserTitle">Erabiltzaile berria</h2>
+        <button class="ghost" type="button" onclick="hideNewUser()">Itxi</button>
+      </div>
+      <p>Langile kontua, aukerakoa. Gidariak beraiek erregistratzen dira; hau pribatuko kudeatzaileentzat da.</p>
+      <label>Erabiltzailea</label>
+      <input id="uName" placeholder="izen.abizen" />
+      <label>Izena</label>
+      <input id="uFull" placeholder="Izen osoa" />
+      <label>Korreoa</label>
+      <input id="uEmail" type="email" placeholder="izu@enpresa.eus" autocomplete="email" />
+      <div class="row" style="margin-top:12px">
+        <button type="button" onclick="createUser()">Gonbidapena bidali</button>
+        <button class="ghost" type="button" onclick="hideNewUser()">Utzi</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="privOverlay" class="overlay hidden" onclick="backdropClose(event, hidePrivileges)">
+    <div class="dialog" role="dialog" aria-labelledby="privTitle">
+      <div class="dialog-head">
+        <h2 id="privTitle">Pribilegioak</h2>
+        <button class="ghost" type="button" onclick="hidePrivileges()">Itxi</button>
+      </div>
+      <p id="privHelp">Publikoa: saioa duen edonork ikusten du okupazioa. Pribatua: jabeak edo kudeatzaileak emandako pribilegioa behar da. Kameraren irudia jabe/adminentzat da.</p>
+      <div id="privVisibility"></div>
+      <div id="privList"></div>
+    </div>
+  </div>
+
+  <div id="passOverlay" class="overlay hidden">
+    <div class="dialog" role="dialog" aria-labelledby="passTitle">
+      <div class="dialog-head">
+        <h2 id="passTitle">Pasahitza aldatu</h2>
+      </div>
+      <p>Lehenetsitako edo ahul den pasahitza ezin da erabili. Gutxienez 12 karaktere, maiuskula, minuskula eta zenbaki bat.</p>
+      <label>Oraingo pasahitza</label>
+      <input id="oldPass" type="password" autocomplete="current-password" />
+      <label>Pasahitz berria</label>
+      <input id="newPass" type="password" minlength="12" autocomplete="new-password" />
+      <div class="meter" id="newMeter" aria-hidden="true"><i></i><i></i><i></i></div>
+      <p class="hint" id="newHint"></p>
+      <label>Errepikatu</label>
+      <input id="newPass2" type="password" minlength="12" autocomplete="new-password" />
+      <div class="row" style="margin-top:12px">
+        <button type="button" onclick="changePassword()">Gorde</button>
+      </div>
+      <p class="status" id="passStatus"></p>
+    </div>
+  </div>
+
+  <div id="emailOverlay" class="overlay hidden">
+    <div class="dialog" role="dialog" aria-labelledby="emailTitle">
+      <div class="dialog-head">
+        <h2 id="emailTitle">Korreoa lotu</h2>
+      </div>
+      <p>Korreoa behar da pasahitza berreskuratzeko eta kontua berresteko.</p>
+      <label>Korreoa</label>
+      <input id="accountEmail" type="email" autocomplete="email" placeholder="izu@enpresa.eus" />
+      <div class="row" style="margin-top:12px">
+        <button type="button" onclick="saveAccountEmail()">Berrespena bidali</button>
+      </div>
+      <p class="status" id="emailStatus"></p>
+    </div>
+  </div>
+
+  <script src="/ui/app.js"></script>
+  <script>
+    const statusEl = document.getElementById("status");
+    const params = new URLSearchParams(location.search);
+    let accountToken = params.get("t") || "";
+    let accountMode = params.get("m") || "reset";
+
+    function setStatus(text) { statusEl.textContent = text || ""; }
+    function backdropClose(event, closeFn) {
+      if (event.target === event.currentTarget) closeFn();
+    }
+    function showPanel(id) {
+      ["loginPanel", "signupPanel", "forgotPanel", "resetPanel"].forEach((name) => {
+        document.getElementById(name).classList.toggle("hidden", name !== id);
+      });
+    }
+    function passwordIssues(pw, username, email) {
+      const issues = [];
+      if (!pw || pw.length < 12) issues.push("12 karaktere");
+      if (pw && /\s/.test(pw)) issues.push("zuriunerik gabe");
+      if (pw && !/[a-z]/.test(pw)) issues.push("minuskula");
+      if (pw && !/[A-Z]/.test(pw)) issues.push("maiuskula");
+      if (pw && !/[0-9]/.test(pw)) issues.push("zenbakia");
+      return issues;
+    }
+    function paintMeter(meterId, hintId, pw) {
+      const issues = passwordIssues(pw);
+      const meter = document.getElementById(meterId);
+      const hint = document.getElementById(hintId);
+      if (meter) meter.className = "meter " + (issues.length > 2 ? "weak" : issues.length ? "ok" : "strong");
+      if (hint) hint.textContent = issues.length ? ("Falta: " + issues.join(", ")) : "Pasahitz sendoa.";
+      return issues;
+    }
+    function showPreview(target, data) {
+      const msg = data.message || "";
+      if (data.preview) {
+        target.innerHTML = msg +
+          ` <p style="margin-top:12px"><a class="btn" href="${data.preview}">Ireki berrespen-esteka</a></p>`;
+        return;
+      }
+      target.textContent = msg;
+    }
+
+    document.querySelectorAll("[data-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const input = document.getElementById(btn.getAttribute("data-toggle"));
+        if (!input) return;
+        const show = input.type === "password";
+        input.type = show ? "text" : "password";
+        btn.textContent = show ? "Ezkutatu" : "Erakutsi";
+      });
+    });
+
+    document.getElementById("loginForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      doLogin();
+    });
+    document.getElementById("signupForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      doRegister();
+    });
+    document.getElementById("forgotForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      doForgot();
+    });
+    document.getElementById("resetForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      doReset();
+    });
+    document.getElementById("btnForgot").onclick = () => {
+      document.getElementById("forgotIdentity").value = document.getElementById("username").value;
+      showPanel("forgotPanel");
+    };
+    document.getElementById("btnSignup").onclick = () => showPanel("signupPanel");
+    document.getElementById("btnBackFromSignup").onclick = () => showPanel("loginPanel");
+    document.getElementById("btnBackLogin").onclick = () => showPanel("loginPanel");
+    document.getElementById("btnResend").onclick = () => doResend();
+    document.getElementById("resetPass").addEventListener("input", () => {
+      paintMeter("resetMeter", "resetHint", document.getElementById("resetPass").value);
+    });
+    document.getElementById("signupPass").addEventListener("input", () => {
+      paintMeter("signupMeter", "signupHint", document.getElementById("signupPass").value);
+    });
+    const newPass = document.getElementById("newPass");
+    if (newPass) newPass.addEventListener("input", () => {
+      paintMeter("newMeter", "newHint", newPass.value);
+    });
+
+    async function doLogin() {
+      const btn = document.querySelector("#loginForm button[type=submit]");
+      btn.disabled = true;
+      try {
+        const data = await api("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username: document.getElementById("username").value.trim(),
+            password: document.getElementById("password").value
+          })
+        });
+        setToken("");
+        setCurrentUser(data.user);
+        document.getElementById("password").value = "";
+        await boot();
+      } catch (e) {
+        document.getElementById("loginStatus").textContent = e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function doRegister() {
+      const status = document.getElementById("signupStatus");
+      const pass = document.getElementById("signupPass").value;
+      if (pass !== document.getElementById("signupPass2").value) {
+        status.textContent = "Pasahitzak ez datoz bat.";
+        return;
+      }
+      const issues = passwordIssues(pass);
+      if (issues.length) {
+        status.textContent = "Pasahitzak falta du: " + issues.join(", ");
+        return;
+      }
+      const btn = document.querySelector("#signupForm button[type=submit]");
+      btn.disabled = true;
+      status.textContent = "";
+      try {
+        const data = await api("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("signupEmail").value.trim(),
+            name: document.getElementById("signupName").value.trim(),
+            password: pass
+          })
+        });
+        showPreview(status, data);
+      } catch (e) {
+        status.textContent = e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function doResend() {
+      const status = document.getElementById("loginStatus");
+      try {
+        const data = await api("/auth/resend", {
+          method: "POST",
+          body: JSON.stringify({
+            identity: document.getElementById("username").value.trim(),
+            email: document.getElementById("forgotEmail") ? document.getElementById("forgotEmail").value.trim() : ""
+          })
+        });
+        showPreview(status, data);
+      } catch (e) {
+        status.textContent = e.message;
+      }
+    }
+
+    async function doForgot() {
+      const status = document.getElementById("forgotStatus");
+      status.textContent = "Bidaltzen…";
+      try {
+        const data = await api("/auth/forgot", {
+          method: "POST",
+          body: JSON.stringify({
+            identity: document.getElementById("forgotIdentity").value.trim(),
+            email: document.getElementById("forgotEmail").value.trim()
+          })
+        });
+        showPreview(status, data);
+      } catch (e) {
+        status.textContent = e.message;
+      }
+    }
+
+    async function doReset() {
+      const status = document.getElementById("resetStatus");
+      const next = document.getElementById("resetPass").value;
+      if (next !== document.getElementById("resetPass2").value) {
+        status.textContent = "Pasahitz berriak ez datoz bat.";
+        return;
+      }
+      const issues = passwordIssues(next);
+      if (issues.length) {
+        status.textContent = "Pasahitz ahula: " + issues.join(", ") + ".";
+        return;
+      }
+      const path = accountMode === "invite" ? "/auth/invite" : "/auth/reset";
+      try {
+        const data = await api(path, {
+          method: "POST",
+          body: JSON.stringify({ token: accountToken, new_password: next })
+        });
+        setCurrentUser(data.user);
+        history.replaceState({}, "", "/");
+        await boot();
+      } catch (e) {
+        status.textContent = e.message;
+      }
+    }
+
+    async function openAccountLink() {
+      if (!accountToken) return;
+      if (accountMode === "verify") {
+        try {
+          const data = await api("/auth/verify", {
+            method: "POST",
+            body: JSON.stringify({ token: accountToken })
+          });
+          setCurrentUser(data.user);
+          history.replaceState({}, "", "/");
+          await boot();
+        } catch (e) {
+          showPanel("loginPanel");
+          document.getElementById("loginStatus").textContent = e.message;
+        }
+        return;
+      }
+      showPanel("resetPanel");
+      document.getElementById("resetTitle").textContent =
+        accountMode === "invite" ? "Kontua osatu" : "Pasahitz berria";
+      try {
+        const data = await api("/auth/token?t=" + encodeURIComponent(accountToken) + "&m=" + encodeURIComponent(accountMode));
+        document.getElementById("resetLead").textContent =
+          (data.user.email ? data.user.email + " · " : "") +
+          "Gutxienez 12 karaktere, maiuskula, minuskula eta zenbaki bat.";
+      } catch (e) {
+        document.getElementById("resetStatus").textContent = e.message;
+      }
+    }
+
+    async function doLogout() {
+      try { await api("/auth/logout", { method: "POST" }); } catch (_) {}
+      setToken("");
+      setCurrentUser(null);
+      location.reload();
+    }
+
+    function showCreate() {
+      document.getElementById("createOverlay").classList.remove("hidden");
+      document.getElementById("newName").focus();
+    }
+    function hideCreate() {
+      document.getElementById("createOverlay").classList.add("hidden");
+    }
+    function showNewUser() {
+      document.getElementById("newUserOverlay").classList.remove("hidden");
+      document.getElementById("uName").focus();
+    }
+    function hideNewUser() {
+      document.getElementById("newUserOverlay").classList.add("hidden");
+    }
+    let privParking = "";
+    async function showPrivileges(parkingId, name) {
+      privParking = parkingId;
+      document.getElementById("privTitle").textContent = "Pribilegioak · " + (name || parkingId);
+      document.getElementById("privOverlay").classList.remove("hidden");
+      await loadPrivileges();
+    }
+    function hidePrivileges() {
+      document.getElementById("privOverlay").classList.add("hidden");
+    }
+
+    async function createParking() {
+      try {
+        const data = await api("/parkings", {
+          method: "POST",
+          body: JSON.stringify({
+            name: document.getElementById("newName").value.trim(),
+            parking_id: document.getElementById("newId").value.trim(),
+            camera_url: document.getElementById("newCamera").value.trim(),
+            visibility: document.getElementById("newVisibility").value
+          })
+        });
+        hideCreate();
+        setStatus(data.name + " gordeta.");
+        await loadParkings();
+      } catch (e) { setStatus(e.message); }
+    }
+
+    async function createUser() {
+      try {
+        const data = await api("/users", {
+          method: "POST",
+          body: JSON.stringify({
+            username: document.getElementById("uName").value.trim(),
+            name: document.getElementById("uFull").value.trim(),
+            email: document.getElementById("uEmail").value.trim(),
+            role: "user"
+          })
+        });
+        document.getElementById("uName").value = "";
+        document.getElementById("uFull").value = "";
+        document.getElementById("uEmail").value = "";
+        hideNewUser();
+        setStatus(data.message || "Gonbidapena bidalita.");
+        if (data.preview) setStatus((data.message || "") + " Esteka lokal bat ere sortu da.");
+      } catch (e) { setStatus(e.message); }
+    }
+
+    async function setVisibility(visibility) {
+      try {
+        await api("/parkings/visibility", {
+          method: "POST",
+          body: JSON.stringify({ parking_id: privParking, visibility })
+        });
+        await loadParkings();
+        await loadPrivileges();
+      } catch (e) { setStatus(e.message); }
+    }
+
+    async function setPrivilege(username, privilege) {
+      try {
+        await api("/parkings/privilege", {
+          method: "POST",
+          body: JSON.stringify({ parking_id: privParking, username, privilege })
+        });
+        await loadParkings();
+        await loadPrivileges();
+      } catch (e) { setStatus(e.message); }
+    }
+
+    async function loadPrivileges() {
+      const data = await api("/parking/acl?parking_id=" + encodeURIComponent(privParking));
+      const visBox = document.getElementById("privVisibility");
+      const publicLot = data.visibility !== "private";
+      if (data.can_set_visibility) {
+        visBox.innerHTML = `<label>Ikusgarritasuna</label>
+          <select onchange="setVisibility(this.value)">
+            <option value="public" ${publicLot ? "selected" : ""}>Publikoa</option>
+            <option value="private" ${publicLot ? "" : "selected"}>Pribatua</option>
+          </select>`;
+      } else {
+        visBox.innerHTML = `<p class="hint">${publicLot ? "Parking publikoa" : "Parking pribatua"}</p>`;
+      }
+      const box = document.getElementById("privList");
+      box.innerHTML = "";
+      (data.users || []).forEach((row) => {
+        const locked = row.privilege === "admin" || row.privilege === "owner";
+        const line = document.createElement("div");
+        line.className = "priv-row";
+        const who = `<div><b>${escapeHtml(row.name)}</b><p class="mono">${escapeHtml(row.username)}</p></div>`;
+        if (locked) {
+          line.innerHTML = who + `<span class="pill">${row.privilege === "admin" ? "admin orokorra" : "jabea"}</span>`;
+        } else {
+          const stewardOpt = data.can_assign_steward ? `<option value="steward" ${row.privilege === "steward" ? "selected" : ""}>Kudeatzailea</option>` : "";
+          const noneLabel = publicLot ? "Ikusle (publikoa)" : "Ez ikusi";
+          line.innerHTML = who + `<select onchange="setPrivilege('${escapeHtml(row.username)}', this.value)">
+              <option value="none" ${row.privilege === "none" ? "selected" : ""}>${noneLabel}</option>
+              <option value="user" ${row.privilege === "user" ? "selected" : ""}>Erabiltzailea</option>
+              ${stewardOpt}
+            </select>`;
+        }
+        box.appendChild(line);
+      });
+    }
+
+    const listView = (location.pathname.replace(/\/+$/, "") || "/").endsWith("aparkalekuak") ? "all" : "mine";
+    let parkingItems = [];
+    function parkingQuery() {
+      return (document.getElementById("parkingSearch")?.value || "").trim().toLowerCase();
+    }
+    function isMine(p) {
+      return !!(p && (p.assigned || p.favorite));
+    }
+    function visibleParkings() {
+      return listView === "mine" ? parkingItems.filter(isMine) : parkingItems;
+    }
+    function updateDashStats(items) {
+      const count = document.getElementById("lotCount");
+      const freeEl = document.getElementById("lotFree");
+      const busyEl = document.getElementById("lotBusy");
+      if (count) count.textContent = items.length + " aparkaleku";
+      if (freeEl) freeEl.textContent = items.reduce((sum, p) => sum + (p.free_spaces || 0), 0) + " libre";
+      if (busyEl) busyEl.textContent = items.reduce((sum, p) => sum + (p.occupied_spaces || 0), 0) + " okupatu";
+    }
+    function roleLabel(p) {
+      if (p.assigned) {
+        if (p.privilege === "owner") return "jabea";
+        if (p.privilege === "steward") return "kudeatzailea";
+        if (p.privilege === "admin") return "admin";
+        return "erabiltzailea";
+      }
+      if (p.favorite) return "faboritoa";
+      if (p.privilege === "admin") return "admin";
+      if (p.privilege === "owner") return "jabea";
+      if (p.privilege === "steward") return "kudeatzailea";
+      if (p.privilege === "user") return "erabiltzailea";
+      return p.visibility === "private" ? "pribatua" : "publikoa";
+    }
+    async function toggleFavorite(parkingId, favorite) {
+      try {
+        const data = await api("/parkings/favorite", {
+          method: "POST",
+          body: JSON.stringify({ parking_id: parkingId, favorite })
+        });
+        if (data.user) setCurrentUser(data.user);
+        const idx = parkingItems.findIndex((row) => row.id === parkingId);
+        if (idx >= 0 && data.parking) parkingItems[idx] = data.parking;
+        else await loadParkings();
+        renderParkings();
+      } catch (e) { setStatus(e.message); }
+    }
+    function renderParkings() {
+      const grid = document.getElementById("parkingGrid");
+      grid.innerHTML = "";
+      const items = visibleParkings();
+      updateDashStats(items);
+      const q = parkingQuery();
+      const shown = q
+        ? items.filter((p) => ((p.name || "") + " " + (p.id || "")).toLowerCase().includes(q))
+        : items;
+      if (!shown.length) {
+        if (q) {
+          grid.innerHTML = `<div class="empty-panel"><h3>Ez da aparkalekurik aurkitu</h3><p>Aldatu bilaketa edo garbitu iragazkia.</p></div>`;
+          return;
+        }
+        if (listView === "mine") {
+          grid.innerHTML = `<div class="empty-panel">
+            <h3>Ez duzu oraindik aparkalekurik</h3>
+            <p>Hemen faborito publikoak eta erabiltzaile gisa baimenduta zauden aparkalekuak agertzen dira.</p>
+            <p style="margin-top:10px"><a class="btn" href="/aparkalekuak">Aparkaleku guztiak ikusi</a></p>
+          </div>`;
+          return;
+        }
+        grid.innerHTML = `<div class="empty-panel"><h3>Ez dago aparkalekurik</h3><p>Ez dago ikusgai dagoen aparkalekurik.</p></div>`;
+        return;
+      }
+      shown.forEach((p) => {
+        const card = document.createElement("article");
+        card.className = "lot-card";
+        const free = p.free_spaces ?? 0;
+        const busy = p.occupied_spaces ?? 0;
+        const total = p.space_count ?? 0;
+        const edit = canEditParking(p);
+        const manage = p.can_manage_users;
+        const vis = p.visibility === "private" ? "pribatua" : "publikoa";
+        const publicLot = p.visibility !== "private";
+        const favBtn = publicLot
+          ? `<button type="button" class="fav${p.favorite ? " on" : ""}" data-fav title="${p.favorite ? "Kendu faboritoetatik" : "Gehitu faboritoetara"}">${p.favorite ? "★" : "☆"}</button>`
+          : "";
+        card.innerHTML = `
+          <div class="meta">
+            <h3>${escapeHtml(p.name || p.id)}</h3>
+            <span class="row">
+              ${favBtn}
+              <span class="pill">${escapeHtml(vis)}</span>
+              <span class="pill">${escapeHtml(roleLabel(p))}</span>
+            </span>
+          </div>
+          <div class="stats">
+            <div class="stat ok"><b class="tabular">${free}</b><span>libre</span></div>
+            <div class="stat busy"><b class="tabular">${busy}</b><span>okupatu</span></div>
+          </div>
+          <p>${total} plaza${p.camera_ok === false ? (edit ? " · kamera gabe" : " · ez dago martxan") : ""}${edit && p.reliability_accuracy != null ? " · " + Math.round(p.reliability_accuracy * 100) + "% asmatze" : ""}</p>
+          <div class="row">
+            <a class="btn" href="/egoera?parking_id=${encodeURIComponent(p.id)}">Egoera</a>
+            ${edit ? `<a class="btn ghost" href="/konfigurazioa?parking_id=${encodeURIComponent(p.id)}">Konfigurazioa</a>
+            <a class="btn ghost" href="/entrenatu?parking_id=${encodeURIComponent(p.id)}">Entrenatu</a>
+            <a class="btn ghost" href="/fidagarritasuna?parking_id=${encodeURIComponent(p.id)}">Fidagarritasuna</a>
+            <button type="button" class="ghost" data-screen>Pantaila</button>` : ""}
+            ${manage ? `<button type="button" class="ghost" data-priv>Pribilegioak</button>` : ""}
+          </div>
+        `;
+        const favEl = card.querySelector("[data-fav]");
+        if (favEl) favEl.onclick = () => toggleFavorite(p.id, !p.favorite);
+        const privBtn = card.querySelector("[data-priv]");
+        if (privBtn) privBtn.onclick = () => showPrivileges(p.id, p.name || p.id);
+        const screenBtn = card.querySelector("[data-screen]");
+        if (screenBtn) screenBtn.onclick = () => openDisplay(p.id);
+        grid.appendChild(card);
+      });
+    }
+    async function loadParkings() {
+      const data = await api("/parkings");
+      parkingItems = data.parkings || [];
+      renderParkings();
+    }
+    document.getElementById("parkingSearch").addEventListener("input", () => {
+      renderParkings();
+    });
+
+    async function openDisplay(parkingId) {
+      try {
+        const data = await api("/parking/display?parking_id=" + encodeURIComponent(parkingId));
+        window.open(data.path, "_blank", "noopener");
+      } catch (e) { setStatus(e.message); }
+    }
+
+    async function changePassword() {
+      const status = document.getElementById("passStatus");
+      const next = document.getElementById("newPass").value;
+      if (next !== document.getElementById("newPass2").value) {
+        status.textContent = "Pasahitz berriak ez datoz bat.";
+        return;
+      }
+      try {
+        const data = await api("/auth/password", {
+          method: "POST",
+          body: JSON.stringify({
+            current_password: document.getElementById("oldPass").value,
+            new_password: next
+          })
+        });
+        setCurrentUser(data.user);
+        document.getElementById("passOverlay").classList.add("hidden");
+        status.textContent = "";
+        await boot();
+      } catch (e) {
+        status.textContent = e.message;
+      }
+    }
+
+    async function boot() {
+      try {
+        const me = await api("/auth/me");
+        setCurrentUser(me.user);
+        document.getElementById("loginBox").classList.add("hidden");
+        document.getElementById("appBox").classList.remove("hidden");
+        document.getElementById("mainNav").classList.remove("hidden");
+        document.getElementById("navMine").classList.toggle("active", listView === "mine");
+        document.getElementById("navAll").classList.toggle("active", listView === "all");
+        document.getElementById("hello").textContent = listView === "mine" ? "Zure aparkalekuak" : "Aparkaleku guztiak";
+        document.getElementById("helloSub").textContent = listView === "mine"
+          ? "Faborito publikoak eta erabiltzaile gisa baimenduta zaudenak · " + me.user.name
+          : "Publikoak eta baimena duzun pribatuak · " + me.user.name;
+        document.getElementById("crumb").textContent = listView === "mine" ? "Zureak" : "Guztiak";
+        document.getElementById("who").innerHTML =
+          `<button class="ghost" type="button" onclick="doLogout()">Saioa itxi</button>`;
+        if (me.user.must_change_password) {
+          document.getElementById("helloSub").textContent = "Pasahitza aldatu behar duzu jarraitzeko.";
+          document.getElementById("adminActions").innerHTML = "";
+          document.getElementById("parkingGrid").innerHTML = "";
+          document.getElementById("passOverlay").classList.remove("hidden");
+          return;
+        }
+        document.getElementById("passOverlay").classList.add("hidden");
+        if (me.user.must_set_email || me.user.must_verify_email) {
+          document.getElementById("helloSub").textContent = me.user.must_set_email
+            ? "Lotu korreoa pasahitza berreskuratu ahal izateko."
+            : "Berretsi korreoa jarraitzeko. Begiratu sarrera-ontzia.";
+          document.getElementById("adminActions").innerHTML = "";
+          document.getElementById("parkingGrid").innerHTML = "";
+          document.getElementById("emailOverlay").classList.remove("hidden");
+          if (me.user.email) document.getElementById("accountEmail").value = me.user.email;
+          return;
+        }
+        document.getElementById("emailOverlay").classList.add("hidden");
+        const actions = document.getElementById("adminActions");
+        const bits = [];
+        if (me.user.role === "admin" || me.user.role === "owner") {
+          bits.push(`<button type="button" onclick="showCreate()">Aparkalekua sortu</button>`);
+        }
+        if (me.user.role === "admin") {
+          bits.push(`<button type="button" class="ghost" onclick="showNewUser()">Erabiltzaile berria</button>`);
+        }
+        actions.innerHTML = bits.join("");
+        const search = document.getElementById("parkingSearch");
+        if (search) search.placeholder = listView === "mine" ? "Bilatu zure aparkalekuetan…" : "Bilatu aparkalekuetan…";
+        document.title = listView === "mine" ? "ParkingAI · Zure aparkalekuak" : "ParkingAI · Aparkaleku guztiak";
+        try {
+          await loadParkings();
+        } catch (e) {
+          setStatus(e.message);
+        }
+      } catch (e) {
+        document.getElementById("loginBox").classList.remove("hidden");
+        document.getElementById("appBox").classList.add("hidden");
+        document.getElementById("mainNav").classList.add("hidden");
+        if (accountToken) await openAccountLink();
+        else if (token()) document.getElementById("loginStatus").textContent = e.message;
+      }
+    }
+
+    async function saveAccountEmail() {
+      const status = document.getElementById("emailStatus");
+      try {
+        const data = await api("/auth/email", {
+          method: "POST",
+          body: JSON.stringify({ email: document.getElementById("accountEmail").value.trim() })
+        });
+        setCurrentUser(data.user);
+        showPreview(status, data);
+      } catch (e) {
+        status.textContent = e.message;
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>

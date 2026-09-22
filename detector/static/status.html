@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParkingAI · Egoera</title>
+  <link rel="stylesheet" href="/ui/theme.css" />
+  <style>
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      height: 100dvh;
+    }
+    .parking-switch {
+      width: auto;
+      min-width: 180px;
+      max-width: 280px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .metric {
+      padding: 12px 16px;
+      border-right: 1px solid var(--border);
+    }
+    .metric:last-child { border-right: 0; }
+    .metric b {
+      display: block;
+      font-size: clamp(22px, 3.2vw, 34px);
+      font-weight: 700;
+      line-height: 1.05;
+      color: var(--ink);
+    }
+    .metric.ok b { color: var(--ok); }
+    .metric.busy b { color: var(--busy); }
+    .metric span { font-size: 12px; color: var(--muted); }
+    .metric .note { display: block; margin-top: 4px; font-size: 11px; min-height: 14px; }
+    .lot {
+      display: grid;
+      gap: 6px;
+      min-height: 0;
+      height: 100%;
+      padding: 12px 14px;
+      background: #101418;
+    }
+    .stall, .aisle {
+      min-width: 0;
+      min-height: 0;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 4px;
+    }
+    .stall {
+      background: #1a2228;
+      border: 1px solid #3a4650;
+    }
+    .stall .car {
+      width: 42%;
+      flex: 1 1 auto;
+      max-height: 62%;
+      border-radius: 3px;
+      background: #2a333a;
+      display: none;
+    }
+    .stall.free { background: rgba(61, 154, 102, 0.18); border-color: var(--ok); }
+    .stall.busy { background: rgba(196, 92, 78, 0.22); border-color: var(--busy); }
+    .stall.busy .car { display: block; background: #2b1c1a; }
+    .stall.hidden { background: rgba(61, 126, 189, 0.22); border-color: var(--info); }
+    .stall .id {
+      font-weight: 700;
+      font-size: clamp(10px, 1.5vmin, 13px);
+      color: var(--ink);
+    }
+    .aisle {
+      background: #161b20;
+    }
+    .aisle.lane {
+      background:
+        repeating-linear-gradient(90deg, transparent 0 12px, rgba(201,162,39,0.55) 12px 22px),
+        #1a1510;
+      background-size: 100% 3px, 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }
+    .lot.col-lane .aisle.lane {
+      background:
+        repeating-linear-gradient(180deg, transparent 0 12px, rgba(201,162,39,0.55) 12px 22px),
+        #1a1510;
+      background-size: 3px 100%, 100% 100%;
+    }
+    .empty-plan {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+    }
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 6px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 1px; display: inline-block; margin-right: 4px; }
+    #cameraWrap { display: none; }
+    #cameraWrap.on {
+      display: block;
+      position: fixed;
+      right: 12px;
+      bottom: 40px;
+      width: min(240px, 38vw);
+      z-index: 5;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+    #camera { width: 100%; display: block; }
+    @media (max-width: 640px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .metric.total { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ParkingAI</a>
+    <span class="crumb">Egoera</span>
+    <select id="parkingId" class="parking-switch" aria-label="Aparkalekua"></select>
+    <span class="spacer"></span>
+    <nav class="row">
+      <a class="btn ghost" href="/">Aparkalekuak</a>
+      <a class="btn ghost hidden" id="btnConfig" href="/konfigurazioa">Konfigurazioa</a>
+      <a class="btn ghost hidden" id="btnReliability" href="/fidagarritasuna">Fidagarritasuna</a>
+      <button class="ghost hidden" id="btnCamera" type="button">Kamera</button>
+      <button class="ghost hidden" id="btnScreen" type="button">Pantaila</button>
+    </nav>
+  </header>
+  <section class="metrics" id="metrics">
+    <div class="metric ok">
+      <b class="tabular" id="freeBig">—</b>
+      <span>plaza libre</span>
+      <span class="note" id="cameraNote"></span>
+    </div>
+    <div class="metric busy">
+      <b class="tabular" id="busyBig">—</b>
+      <span>okupatu</span>
+    </div>
+    <div class="metric total">
+      <b class="tabular" id="totalBig">—</b>
+      <span>guztira</span>
+    </div>
+  </section>
+  <div id="lot" class="lot" aria-live="polite"></div>
+  <footer class="legend">
+    <span><i class="dot" style="background:var(--ok)"></i>Libre</span>
+    <span><i class="dot" style="background:var(--busy)"></i>Okupatuta</span>
+    <span><i class="dot" style="background:var(--info)"></i>Ikusgaitza</span>
+    <span><i class="dot" style="background:#161b20"></i>Pasabidea</span>
+    <span id="hiddenCount"></span>
+  </footer>
+  <div id="cameraWrap"><img id="camera" alt="Kameraren bista" /></div>
+  <script src="/ui/app.js"></script>
+  <script>
+    let plan = { rows: 0, cols: 0, cells: [], defined: false };
+    let occupancy = {};
+    let occluded = [];
+    let showCamera = false;
+    let currentParking = null;
+    let lotSig = "";
+    let pollBusy = false;
+
+    const parkingId = () => document.getElementById("parkingId").value;
+
+    const AISLE = "~";
+    function isAisle(id) { return id === AISLE; }
+    function isSpaceId(id) { return !!id && id !== AISLE; }
+
+    function spaceIds() {
+      const ids = [];
+      (plan.cells || []).forEach((row) => {
+        (row || []).forEach((id) => { if (isSpaceId(id) && !ids.includes(id)) ids.push(id); });
+      });
+      if (!ids.length) Object.keys(occupancy).forEach((id) => ids.push(id));
+      return ids;
+    }
+
+    function planSig(data) {
+      return (data.rows || 0) + "x" + (data.cols || 0) + ":" +
+        (data.cells || []).map((row) => (row || []).join(",")).join("|");
+    }
+
+    function stallClass(id) {
+      if (occluded.includes(id)) return "stall hidden";
+      if (occupancy[id] === true) return "stall busy";
+      if (occupancy[id] === false) return "stall free";
+      return "stall";
+    }
+
+    function updateHeadline() {
+      const ids = spaceIds();
+      const free = ids.filter((id) => occupancy[id] === false).length;
+      const busy = ids.filter((id) => occupancy[id] === true).length;
+      document.getElementById("metrics").classList.toggle("full", free === 0 && ids.length > 0);
+      document.getElementById("freeBig").textContent = String(free);
+      document.getElementById("busyBig").textContent = String(busy);
+      document.getElementById("totalBig").textContent = String(ids.length);
+      document.getElementById("hiddenCount").textContent = occluded.length ? occluded.length + " ezkutuan" : "";
+    }
+
+    function buildLot() {
+      const el = document.getElementById("lot");
+      const rows = plan.rows || 0;
+      const cols = plan.cols || 0;
+      const cells = plan.cells || [];
+      if (!plan.defined || rows < 1 || cols < 1 || !cells.length) {
+        el.style.gridTemplateColumns = "1fr";
+        el.style.gridTemplateRows = "1fr";
+        const can = currentParking && canEditParking(currentParking);
+        el.innerHTML = `<div class="empty-plan">Administratzaileak konfigurazioan erabiltzaile-bista definitu behar du.` +
+          (can ? ` <a href="/konfigurazioa?parking_id=${encodeURIComponent(parkingId())}">Ireki konfigurazioa</a>` : "") +
+          `</div>`;
+        return;
+      }
+      el.style.gridTemplateColumns = cols
+        ? Array.from({ length: cols }, (_, c) =>
+            cells.length && cells.every((row) => isAisle((row || [])[c])) ? "minmax(10px, 0.28fr)" : "minmax(0, 1fr)"
+          ).join(" ")
+        : "1fr";
+      el.style.gridTemplateRows = cells.map((row) =>
+        (row || []).length && (row || []).every(isAisle) ? "minmax(10px, 0.28fr)" : "minmax(0, 1fr)"
+      ).join(" ") || "1fr";
+      const hasColLane = Array.from({ length: cols }, (_, c) =>
+        cells.length && cells.every((row) => isAisle((row || [])[c]))
+      ).some(Boolean);
+      el.classList.toggle("col-lane", hasColLane);
+      el.innerHTML = "";
+      cells.forEach((row, r) => {
+        (row || []).forEach((id, c) => {
+          const cell = document.createElement("div");
+          cell.dataset.r = String(r);
+          cell.dataset.c = String(c);
+          if (isAisle(id) || !id) {
+            cell.className = "aisle" + (isAisle(id) ? " lane" : "");
+            cell.title = "Pasabidea";
+          } else {
+            cell.className = stallClass(id);
+            cell.dataset.id = id;
+            cell.innerHTML = `<span class="car"></span><span class="id">${escapeHtml(id)}</span>`;
+          }
+          el.appendChild(cell);
+        });
+      });
+    }
+
+    function updateLot() {
+      document.querySelectorAll("#lot .stall[data-id]").forEach((cell) => {
+        const id = cell.dataset.id;
+        const next = stallClass(id);
+        if (cell.className !== next) cell.className = next;
+      });
+    }
+
+    function renderLot() {
+      const sig = planSig(plan);
+      if (sig !== lotSig) {
+        lotSig = sig;
+        buildLot();
+      } else {
+        updateLot();
+      }
+    }
+
+    async function loadParkings() {
+      const data = await api("/parkings");
+      const select = document.getElementById("parkingId");
+      const current = parkingId();
+      select.innerHTML = "";
+      (data.parkings || []).forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = (p.name || p.id);
+        select.appendChild(opt);
+      });
+      if (!select.options.length) {
+        const opt = document.createElement("option");
+        opt.value = "proba-ofiziala";
+        opt.textContent = "proba-ofiziala";
+        select.appendChild(opt);
+      }
+      if (current) select.value = current;
+      select.onchange = () => loadParking(true);
+    }
+
+    async function loadParking(forcePlan) {
+      if (!parkingId()) return;
+      const [planData, parking] = await Promise.all([
+        api("/plan?parking_id=" + encodeURIComponent(parkingId())),
+        api("/parking?parking_id=" + encodeURIComponent(parkingId()))
+      ]);
+      plan = planData;
+      currentParking = parking;
+      const cfg = document.getElementById("btnConfig");
+      const rel = document.getElementById("btnReliability");
+      const cam = document.getElementById("btnCamera");
+      const screen = document.getElementById("btnScreen");
+      const can = canEditParking(parking);
+      const seeCam = canViewCamera(parking);
+      cfg.classList.toggle("hidden", !can);
+      cfg.href = "/konfigurazioa?parking_id=" + encodeURIComponent(parking.id);
+      if (rel) {
+        rel.classList.toggle("hidden", !can);
+        rel.href = "/fidagarritasuna?parking_id=" + encodeURIComponent(parking.id);
+      }
+      cam.classList.toggle("hidden", !seeCam);
+      screen.classList.toggle("hidden", !can);
+      if (!seeCam) {
+        showCamera = false;
+        document.getElementById("cameraWrap").classList.remove("on");
+        document.getElementById("camera").removeAttribute("src");
+      }
+      if (forcePlan) lotSig = "";
+      await refreshStatus();
+    }
+
+    async function refreshStatus() {
+      if (!parkingId()) return;
+      const status = await api("/status?parking_id=" + encodeURIComponent(parkingId()));
+      occupancy = status.spaces || {};
+      occluded = status.occluded || [];
+      document.getElementById("cameraNote").textContent =
+        status.camera_ok === false ? (status.error || "Sistema ez dago martxan.") : "";
+      updateHeadline();
+      renderLot();
+    }
+
+    async function tick() {
+      if (pollBusy || document.hidden) return;
+      pollBusy = true;
+      try { await refreshStatus(); }
+      catch (e) { document.getElementById("cameraNote").textContent = e.message; }
+      finally { pollBusy = false; }
+    }
+
+    async function refreshCamera() {
+      if (!canViewCamera(currentParking)) return;
+      await authImage(document.getElementById("camera"), "/raw?parking_id=" + encodeURIComponent(parkingId()));
+    }
+
+    document.getElementById("btnCamera").onclick = async () => {
+      showCamera = !showCamera;
+      document.getElementById("cameraWrap").classList.toggle("on", showCamera);
+      if (showCamera) await refreshCamera();
+    };
+    document.getElementById("btnScreen").onclick = async () => {
+      try {
+        const data = await api("/parking/display?parking_id=" + encodeURIComponent(parkingId()));
+        window.open(data.path, "_blank", "noopener");
+      } catch (e) {
+        document.getElementById("cameraNote").textContent = e.message;
+      }
+    };
+
+    async function boot() {
+      try {
+        const me = await api("/auth/me");
+        setCurrentUser(me.user);
+      } catch (e) {
+        location.href = "/";
+        return;
+      }
+      const params = new URLSearchParams(location.search);
+      try {
+        await loadParkings();
+        if (params.get("parking_id")) document.getElementById("parkingId").value = params.get("parking_id");
+        await loadParking(true);
+      } catch (e) {
+        document.getElementById("freeBig").textContent = "—";
+        document.getElementById("cameraNote").textContent = e.message;
+      }
+    }
+    boot();
+    setInterval(tick, 1000);
+    setInterval(() => { if (showCamera) refreshCamera(); }, 500);
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
+  </script>
+</body>
+</html>

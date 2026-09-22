@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParkingAI · Fidagarritasuna</title>
+  <link rel="stylesheet" href="/ui/theme.css" />
+  <style>
+    body.tech { min-height: 100vh; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 18px 16px 40px; }
+    .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .head h1 {
+      font-size: 15px;
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px;
+    }
+    .metric b {
+      display: block;
+      font-family: var(--mono);
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 600;
+    }
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .metric.ok b { color: var(--ok); }
+    .metric.warn b { color: var(--warn); }
+    .metric.bad b { color: var(--busy); }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .panel h2 {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 72px;
+    }
+    .bars i {
+      flex: 1;
+      min-width: 4px;
+      background: var(--accent);
+      opacity: 0.85;
+    }
+    .bars i.low { background: var(--busy); }
+    .bars i.mid { background: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td {
+      text-align: left;
+      padding: 7px 6px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+    }
+    th {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+    td.num { text-align: right; }
+    .pct.ok { color: var(--ok); }
+    .pct.mid { color: var(--warn); }
+    .pct.bad { color: var(--busy); }
+    .empty { color: var(--muted); padding: 8px 0; }
+    @media (max-width: 800px) {
+      .metrics { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body class="tech">
+  <header class="topbar">
+    <a class="brand" href="/">ParkingAI</a>
+    <span class="crumb">Fidagarritasuna</span>
+    <select id="parkingId" class="parking-switch" aria-label="Aparkalekua" style="width:auto;min-width:160px;max-width:240px"></select>
+    <span class="spacer"></span>
+    <nav class="row">
+      <a class="btn ghost" href="/">Menua</a>
+      <a class="btn ghost" id="toTrain" href="/entrenatu">Entrenatu</a>
+      <a class="btn ghost" id="toStatus" href="/egoera">Egoera</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    <div class="head">
+      <div>
+        <h1 id="title">Fidagarritasuna</h1>
+        <p id="lead">Zure entrenamenduekin alderatuta, algoritmoak plaza bakoitza asmatu duen ala ez.</p>
+      </div>
+    </div>
+    <section class="metrics">
+      <div class="metric" id="mAcc">
+        <b class="tabular" id="accBig">—</b>
+        <span>asmatze orokorra</span>
+      </div>
+      <div class="metric">
+        <b class="tabular" id="recentBig">—</b>
+        <span>azken irudiak</span>
+      </div>
+      <div class="metric">
+        <b id="trendBig">—</b>
+        <span>joera</span>
+      </div>
+      <div class="metric">
+        <b class="tabular" id="nBig">—</b>
+        <span>egiaztapenak</span>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Denboran zehar</h2>
+      <div class="bars" id="bars"></div>
+      <p class="hint" id="histNote" style="margin-top:8px"></p>
+    </section>
+    <section class="panel">
+      <h2>Plaza bakoitza</h2>
+      <p class="hint">Ehunekoa: irudi horretan sistema zure etiketarekin bat etorri den aldiak. Kotxe galdua = libre iragarri, okupatuta zegoen. Alarma faltsua = okupatu iragarri, libre zegoen.</p>
+      <div id="tableBox"></div>
+    </section>
+  </div>
+  <script src="/ui/app.js"></script>
+  <script>
+    const parkingId = () => document.getElementById("parkingId").value.trim();
+    function pct(value) {
+      if (value == null || Number.isNaN(value)) return "—";
+      return Math.round(value * 1000) / 10 + "%";
+    }
+    function tone(value) {
+      if (value == null) return "";
+      if (value >= 0.85) return "ok";
+      if (value >= 0.65) return "mid";
+      return "bad";
+    }
+    function trendLabel(trend, delta) {
+      if (trend === "hobetzen") return "Hobetzen" + (delta != null ? " (+" + Math.round(delta * 100) + " puntu)" : "");
+      if (trend === "okertzen") return "Okertzen" + (delta != null ? " (" + Math.round(delta * 100) + " puntu)" : "");
+      if (trend === "egonkor") return "Egonkor";
+      return "Datu gutxi";
+    }
+    function paint(data) {
+      const acc = data.accuracy;
+      const recent = data.recent_accuracy;
+      document.getElementById("accBig").textContent = pct(acc);
+      document.getElementById("mAcc").className = "metric " + tone(acc);
+      document.getElementById("recentBig").textContent = pct(recent);
+      document.getElementById("trendBig").textContent = trendLabel(data.trend, data.trend_delta);
+      document.getElementById("nBig").textContent = String(data.checks || 0);
+      document.getElementById("lead").textContent =
+        (data.frames || 0) + " entrenamendu-irudi. " +
+        (data.hits || 0) + " asmatze, " + (data.misses || 0) + " huts. " +
+        "Kotxe galduak: " + (data.false_free || 0) + " · alarmak: " + (data.false_occupied || 0) +
+        (data.model_accuracy != null ? " · modeloaren barne-score: " + pct(data.model_accuracy) : "") + ".";
+      const bars = document.getElementById("bars");
+      bars.innerHTML = "";
+      const hist = data.history || [];
+      if (!hist.length) {
+        document.getElementById("histNote").textContent = "Irudi osoak bidali ondoren hemen ikusiko da eboluzioa.";
+      } else {
+        hist.forEach((row) => {
+          const bar = document.createElement("i");
+          const v = row.accuracy == null ? 0 : row.accuracy;
+          bar.style.height = Math.max(4, Math.round(v * 72)) + "px";
+          bar.className = v < 0.65 ? "low" : (v < 0.85 ? "mid" : "");
+          bar.title = pct(row.accuracy) + " · " + (row.hits || 0) + "/" + (row.n || 0);
+          bars.appendChild(bar);
+        });
+        document.getElementById("histNote").textContent =
+          "Barra bakoitza irudi oso baten asmatze-tasa da, zaharrenetik berrienera.";
+      }
+      const box = document.getElementById("tableBox");
+      const rows = data.spaces || [];
+      if (!rows.length) {
+        box.innerHTML = `<p class="empty">Ez dago plazarik. Gorde lehenik konfigurazioko poligonoak.</p>`;
+        return;
+      }
+      if (!(data.checks || 0)) {
+        box.innerHTML = `<p class="empty">Bidali entrenamenduko irudiak plaza bakoitza markatuta. Hemendik aurrera asmatze-tasa agertuko da.</p>`;
+        return;
+      }
+      box.innerHTML = `<table>
+        <thead><tr>
+          <th>Plaza</th><th class="num">Asmatze</th><th class="num">Egiaztapen</th>
+          <th class="num">Kotxe galdua</th><th class="num">Alarma faltsua</th><th>Azkena</th>
+        </tr></thead>
+        <tbody>${rows.map((row) => {
+          const cls = "pct " + tone(row.accuracy);
+          return `<tr>
+            <td>${escapeHtml(row.id)}</td>
+            <td class="num ${cls}">${pct(row.accuracy)}</td>
+            <td class="num">${row.n || 0}</td>
+            <td class="num">${row.false_free || 0}</td>
+            <td class="num">${row.false_occupied || 0}</td>
+            <td>${row.last_ok == null ? "—" : (row.last_ok ? "zuzen" : "huts")}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>`;
+    }
+    async function loadReport() {
+      const pid = parkingId();
+      if (!pid) return;
+      document.getElementById("toTrain").href = "/entrenatu?parking_id=" + encodeURIComponent(pid);
+      document.getElementById("toStatus").href = "/egoera?parking_id=" + encodeURIComponent(pid);
+      document.getElementById("title").textContent = "Fidagarritasuna · " + pid;
+      document.title = "ParkingAI · Fidagarritasuna · " + pid;
+      const data = await api("/dataset/reliability?parking_id=" + encodeURIComponent(pid));
+      paint(data);
+    }
+    async function boot() {
+      try {
+        const me = await api("/auth/me");
+        setCurrentUser(me.user);
+      } catch (e) {
+        location.href = "/";
+        return;
+      }
+      const data = await api("/parkings");
+      const select = document.getElementById("parkingId");
+      const params = new URLSearchParams(location.search);
+      select.innerHTML = "";
+      (data.parkings || []).forEach((p) => {
+        if (!canEditParking(p)) return;
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name || p.id;
+        select.appendChild(opt);
+      });
+      if (params.get("parking_id")) select.value = params.get("parking_id");
+      if (!parkingId()) {
+        document.getElementById("lead").textContent = "Ez dago editatu dezakezun aparkalekurik.";
+        return;
+      }
+      select.onchange = () => {
+        history.replaceState({}, "", "/fidagarritasuna?parking_id=" + encodeURIComponent(parkingId()));
+        loadReport();
+      };
+      await loadReport();
+    }
+    boot();
+  </script>
+</body>
+</html>

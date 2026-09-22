@@ -1,0 +1,20 @@
+{
+  "host": "127.0.0.1",
+  "port": 8000,
+  "interval_seconds": 1,
+  "admin_user": "admin",
+  "allowed_hosts": ["localhost", "127.0.0.1"],
+  "cors_origins": [
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8080",
+    "http://localhost:8080"
+  ],
+  "smtp": {
+    "host": "",
+    "port": 587,
+    "user": "",
+    "password": "",
+    "from": ""
+  }
+}

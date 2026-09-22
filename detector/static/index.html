@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="eu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ParkingAI · Konfigurazioa</title>
+  <link rel="stylesheet" href="/ui/theme.css" />
+  <style>
+    html, body { height: 100%; }
+    body.tech {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      height: 100dvh;
+      overflow: hidden;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 380px);
+      min-height: 0;
+    }
+    .cam-col {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      min-height: 0;
+      border-right: 1px solid var(--border);
+    }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .toolbar input { flex: 1; min-width: 160px; width: auto; }
+    #stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #0a0c0e;
+      overflow: hidden;
+    }
+    #viewport {
+      position: relative;
+      width: 100%;
+      transform-origin: 0 0;
+    }
+    #viewport img {
+      width: 100%;
+      display: block;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+    .cam-status {
+      padding: 6px 8px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12px;
+      color: var(--muted);
+      min-height: 28px;
+    }
+    .tools {
+      overflow: auto;
+      background: var(--bg);
+      min-height: 0;
+    }
+    .panel {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 10px 10px;
+    }
+    .panel h2 {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+    .panel p, .panel .hint { font-size: 12px; margin: 6px 0; }
+    .spaces { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+    .space {
+      padding: 2px 7px;
+      border-radius: 3px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 11px;
+      font-family: var(--mono);
+      font-weight: 600;
+    }
+    .space.on { border-color: var(--ink); }
+    .space.free { background: rgba(61,154,102,0.25); border-color: var(--ok); color: var(--ink); }
+    .space.busy { background: rgba(196,92,78,0.3); border-color: var(--busy); color: var(--ink); }
+    .space.paint { border-color: var(--warn); }
+    .space.placed { opacity: 0.5; }
+    #selectedBanner {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: var(--elevated);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .lot-edit {
+      display: grid;
+      gap: 3px;
+      margin-top: 6px;
+      padding: 6px;
+      background: #0a0c0e;
+      border: 1px solid var(--border);
+    }
+    .lot-edit .cell {
+      min-height: 32px;
+      border: 1px dashed var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 11px;
+      background: var(--elevated);
+    }
+    .lot-edit .cell.used { background: rgba(61,154,102,0.2); border-style: solid; border-color: var(--ok); }
+    .lot-edit .cell.aisle { background: #12161a; color: var(--warn); font-size: 10px; letter-spacing: 0.04em; }
+    .lot-edit .cell.empty { background: var(--elevated); color: var(--muted); }
+    .num { width: 72px !important; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    @media (max-width: 900px) {
+      body.tech { height: auto; overflow: auto; }
+      main { grid-template-columns: 1fr; }
+      #stage { height: 46vh; flex: none; }
+    }
+  </style>
+</head>
+<body class="tech">
+  <header class="topbar">
+    <a class="brand" href="/">ParkingAI</a>
+    <span class="crumb">Konfigurazioa</span>
+    <span class="spacer"></span>
+    <nav class="row">
+      <a class="btn ghost" href="/">Menua</a>
+      <a class="btn ghost" id="toStatus" href="/egoera">Egoera</a>
+      <a class="btn ghost" id="toTrain" href="/entrenatu">Entrenatu</a>
+      <a class="btn ghost" id="toReliability" href="/fidagarritasuna">Fidagarritasuna</a>
+    </nav>
+  </header>
+  <main>
+    <section class="cam-col">
+      <div class="toolbar">
+        <input id="cameraUrl" placeholder="Kamera URL · jpg, mjpeg, rtsp" />
+        <button type="button" onclick="connect()">Konektatu</button>
+        <button class="ghost" type="button" onclick="refreshImage()">Zuzena</button>
+        <button class="ghost" type="button" onclick="zoomBy(1.25)">+</button>
+        <button class="ghost" type="button" onclick="zoomBy(0.8)">−</button>
+        <button class="ghost" type="button" onclick="resetView()">1×</button>
+        <button class="ghost" type="button" id="btnOverlay">Poliedroak: beteta</button>
+      </div>
+      <div id="stage">
+        <div id="viewport">
+          <img id="view" alt="Kamera irudia" draggable="false" />
+          <canvas id="overlay"></canvas>
+        </div>
+      </div>
+      <p class="cam-status" id="status">Kamera zuzena atzealdeko frameekin eguneratzen da. Entrenamendurako irudiak bereiz hartzen dira.</p>
+    </section>
+    <aside class="tools">
+      <div class="panel">
+        <h2>Aparkalekua</h2>
+        <div class="split">
+          <div>
+            <label>ID</label>
+            <input id="parkingId" value="proba-ofiziala" />
+          </div>
+          <div>
+            <label>Izena</label>
+            <input id="parkingName" placeholder="Proba ofiziala" />
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Plazak (kameran)</h2>
+        <label>Hurrengo izena</label>
+        <input id="nextId" value="A1" />
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" onclick="undoPoint()">Desegin puntu</button>
+          <button class="ghost" type="button" onclick="closeSpace()">Itxi plaza</button>
+          <button class="ghost" type="button" onclick="undoSpace()">Desegin plaza</button>
+          <button type="button" onclick="saveSpaces()">Gorde</button>
+        </div>
+        <p class="hint">Klik: izkinak. Gurpila: zoom. Eskuin / Shift: mugitu.</p>
+        <div class="spaces" id="spaceList"></div>
+      </div>
+      <div class="panel">
+        <h2>Erabiltzaile-bista</h2>
+        <p class="hint">Pasabidea: klikatu tartea irekitzeko. Pasabidean berriro klikatu kentzeko. Gero gorde bista.</p>
+        <div class="row">
+          <input class="num" id="planRows" type="number" min="1" max="20" value="3" title="Errenkadak" />
+          <input class="num" id="planCols" type="number" min="1" max="20" value="4" title="Zutabeak" />
+          <button class="ghost" type="button" onclick="resizePlan()">Sortu</button>
+          <button class="ghost" type="button" onclick="autoFillPlan()">Bete</button>
+          <button type="button" onclick="savePlan()">Gorde bista</button>
+        </div>
+        <p class="status" id="planHint">Hautatu plaza bat kokatzeko, edo pasabidea tartea irekitzeko.</p>
+        <div class="spaces" id="planPalette"></div>
+        <div id="planGrid" class="lot-edit"></div>
+        <p class="status" id="planStatus">Bista gabe.</p>
+      </div>
+      <div class="panel">
+        <h2>Zuzenketak</h2>
+        <p class="hint">Plaza okerra klikatu, gero Libre edo Okupatu. Honek <b style="color:var(--ink)">irudi honetako plaza hori</b> bidaltzen du entrenamendura. Irudi osoa izozteko, joan entrenamendura.</p>
+        <p id="selectedBanner">Plaza bat hautatu irudian. L = libre, O = okupatu. Poliedroak: tresna-barrako botoia edo P.</p>
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" type="button" id="btnFree" onclick="label(false)">Libre (L)</button>
+          <button class="danger" type="button" id="btnBusy" onclick="label(true)">Okupatu (O)</button>
+        </div>
+        <p class="notice" id="learnNotice">Zuzenketa bidali ondoren hemen agertuko da modeloak ikasi duen.</p>
+        <p class="status" id="trainStatus">Berretsitako adibideak: 0</p>
+        <p class="status" id="model">Modeloa: entrenatu gabe</p>
+      </div>
+    </aside>
+  </main>
+  <script src="/ui/app.js"></script>
+  <script>
+    const parkingId = () => document.getElementById("parkingId").value.trim();
+    const cameraUrl = () => document.getElementById("cameraUrl").value.trim();
+    const statusEl = document.getElementById("status");
+    const modelEl = document.getElementById("model");
+    const stage = document.getElementById("stage");
+    const viewport = document.getElementById("viewport");
+    const view = document.getElementById("view");
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+    let spaces = [];
+    let selected = null;
+    let draft = [];
+    let cursor = null;
+    let occupancy = {};
+    function fillOccupancy(src) {
+      const map = {};
+      spaces.forEach((s) => { map[s.id] = src && src[s.id] === true; });
+      return map;
+    }
+    let connected = false;
+    let scale = 1;
+    let tx = 0;
+    let ty = 0;
+    let panning = false;
+    let didPan = false;
+    let panX = 0;
+    let panY = 0;
+    let overrides = {};
+    let samplesFree = 0;
+    let samplesOccupied = 0;
+    let modelTrained = false;
+    let modelAccuracy = null;
+    let labeling = false;
+    let spacesDirty = false;
+    let reviewMode = false;
+    let pending = [];
+    let pendingIndex = 0;
+    let userView = { rows: 3, cols: 4, cells: [] };
+    let paintId = "";
+    const AISLE = "~";
+    const OVERLAY_KEY = "parkingai_overlay";
+    const OVERLAY_LABEL = { fill: "beteta", outline: "ertza", off: "ezkutuan" };
+    let overlayMode = localStorage.getItem(OVERLAY_KEY) || "fill";
+
+    function isAisle(id) { return id === AISLE; }
+    function isSpaceId(id) { return !!id && id !== AISLE; }
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function syncOverlayButton() {
+      const btn = document.getElementById("btnOverlay");
+      if (!btn) return;
+      btn.textContent = "Poliedroak: " + (OVERLAY_LABEL[overlayMode] || overlayMode);
+      btn.setAttribute("aria-pressed", overlayMode !== "off" ? "true" : "false");
+    }
+    function cycleOverlay() {
+      overlayMode = overlayMode === "fill" ? "outline" : overlayMode === "outline" ? "off" : "fill";
+      localStorage.setItem(OVERLAY_KEY, overlayMode);
+      syncOverlayButton();
+      draw();
+      if (overlayMode === "off") setStatus("Poliedroak eta zenbakiak ezkutuan. Klikatu plaza hautatzeko.");
+      else if (overlayMode === "outline") setStatus("Poliedroen ertzak bakarrik. Kotxea hobeto ikusten da.");
+    }
+
+    function applyLearnNotice(data, fallback) {
+      const el = document.getElementById("learnNotice");
+      if (!el) return;
+      const text = (data && (data.message || data.train_hint)) || fallback || el.textContent;
+      const kind = (data && data.kind) || (data && data.learned ? "ok" : (data && data.just_trained ? "warn" : "warn"));
+      el.textContent = text;
+      el.className = "notice" + (kind ? " " + kind : "");
+      setStatus(text);
+    }
+
+    async function connect() {
+      if (!parkingId()) { setStatus("Aparkaleku ID bat behar da."); return; }
+      setStatus("Kamerara konektatzen...");
+      try {
+        const data = await api("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parking_id: parkingId(),
+            camera_url: cameraUrl(),
+            name: document.getElementById("parkingName").value.trim()
+          })
+        });
+        if (data.camera_url) document.getElementById("cameraUrl").value = data.camera_url;
+        connected = true;
+        refreshImage();
+        await poll();
+        setStatus("Kamera eta plazak gordeta daude. Hurrengo saioan berez kargatuko dira.");
+      } catch (e) {
+        setStatus("Ezin konektatu: " + e.message);
+      }
+    }
+
+    function liveUrl() {
+      return "/live?parking_id=" + encodeURIComponent(parkingId()) + "&t=" + Date.now();
+    }
+    function startLive() {
+      if (!parkingId() || reviewMode) return;
+      if (view._blobUrl) {
+        URL.revokeObjectURL(view._blobUrl);
+        view._blobUrl = "";
+      }
+      view.src = liveUrl();
+    }
+    function refreshImage() {
+      if (!parkingId()) return;
+      if (reviewMode) return;
+      startLive();
+    }
+
+    function applyView() {
+      viewport.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+    }
+
+    function zoomBy(factor, cx, cy) {
+      const rect = stage.getBoundingClientRect();
+      const mx = cx == null ? rect.width / 2 : cx;
+      const my = cy == null ? rect.height / 2 : cy;
+      const next = Math.min(8, Math.max(1, scale * factor));
+      const wx = (mx - tx) / scale;
+      const wy = (my - ty) / scale;
+      scale = next;
+      tx = mx - wx * scale;
+      ty = my - wy * scale;
+      if (scale === 1) { tx = 0; ty = 0; }
+      applyView();
+      draw();
+    }
+
+    function resetView() {
+      scale = 1;
+      tx = 0;
+      ty = 0;
+      applyView();
+      draw();
+    }
+
+    async function poll() {
+      if (reviewMode) {
+        await refreshStats();
+        return;
+      }
+      try {
+        const data = await api("/status?parking_id=" + encodeURIComponent(parkingId()) + "&detail=1");
+        applyStats(data);
+        occupancy = { ...(data.spaces || {}), ...overrides };
+        renderSpaces();
+        updateInfo();
+        draw();
+        if (!labeling) {
+          if (data.camera_ok === false) {
+            setStatus(data.error || "Kamera gabe. Sistema ez da ari detektatzen.");
+          } else {
+            const busy = spaces.filter((s) => occupancy[s.id] === true).length;
+            const free = spaces.filter((s) => occupancy[s.id] === false).length;
+            setStatus(`Martxan · ${data.vehicles || 0} ibilgailu · ${busy} okupatu · ${free} libre`);
+          }
+        }
+      } catch (e) {
+        if (!labeling) setStatus("Sistema ez da iristen: " + e.message);
+      }
+    }
+
+    function applyStats(data) {
+      samplesFree = data.samples_free ?? samplesFree;
+      samplesOccupied = data.samples_occupied ?? samplesOccupied;
+      modelTrained = data.model_trained === true;
+      if (data.accuracy != null) modelAccuracy = data.accuracy;
+      const trainStatus = document.getElementById("trainStatus");
+      if (trainStatus) {
+        trainStatus.textContent =
+          `Berretsita: ${data.samples_free || 0} libre, ${data.samples_occupied || 0} okupatu` +
+          (data.frames_pending ? ` · ${data.frames_pending} irudi bufferrean` : "");
+      }
+      const pathEl = document.getElementById("dataPath");
+      if (pathEl && data.data_path) pathEl.textContent = data.data_path;
+    }
+
+    async function refreshStats() {
+      try {
+        const data = await api("/dataset/stats?parking_id=" + encodeURIComponent(parkingId()));
+        applyStats(data);
+        updateInfo();
+      } catch (_) {}
+    }
+
+    function selectSpace(id) {
+      selected = id;
+      renderSpaces();
+      updateInfo();
+      draw();
+      const state = occupancy[id];
+      const stateText = state === true ? "okupatuta" : (state === false ? "libre" : "etiketatu gabe");
+      setStatus(id + " hautatuta (" + stateText + "). L = libre, O = okupatuta.");
+    }
+
+    function updateInfo() {
+      const free = spaces.filter((s) => occupancy[s.id] === false).length;
+      const busy = spaces.filter((s) => occupancy[s.id] === true).length;
+      const unknown = spaces.length - free - busy;
+      const trained = modelTrained
+        ? (modelAccuracy != null ? `algoritmo entrenatuta (${modelAccuracy})` : "algoritmo entrenatuta")
+        : "algoritmoa YOLO + geometria (modelo gabe)";
+      modelEl.textContent = `Pantailan: ${free} libre · ${busy} okupatu · ${unknown} gabe · Adibideak: ${samplesFree} libre, ${samplesOccupied} okupatu · ${trained}`;
+      const banner = document.getElementById("selectedBanner");
+      if (selected) {
+        const state = occupancy[selected];
+        banner.textContent = selected + " · " + (state === true ? "OKUPATUTA" : (state === false ? "LIBRE" : "hautatuta, etiketatu L edo O"));
+        banner.style.background = state === true ? "#5a2a24" : (state === false ? "#1e4a32" : "#0f2024");
+      } else {
+        banner.textContent = "Plaza bat klikatu irudian akatsa zuzentzeko. L/O teklak ere balio dute.";
+        banner.style.background = "#0f2024";
+      }
+    }
+
+    function renderSpaces() {
+      const box = document.getElementById("spaceList");
+      box.innerHTML = "";
+      spaces.forEach((s) => {
+        const el = document.createElement("div");
+        el.className = "space" + (selected === s.id ? " on" : "") + (occupancy[s.id] === true ? " busy" : (occupancy[s.id] === false ? " free" : ""));
+        el.textContent = s.id;
+        el.onclick = () => reviewMode ? flipSpace(s.id) : selectSpace(s.id);
+        box.appendChild(el);
+      });
+      renderPalette();
+      renderPlanGrid();
+    }
+
+    function nextName() {
+      const field = document.getElementById("nextId");
+      const current = field.value.trim() || "A1";
+      const match = current.match(/^([A-Z]+)(\d+)$/i);
+      if (!match) return current;
+      field.value = match[1].toUpperCase() + (parseInt(match[2], 10) + 1);
+      return current.toUpperCase();
+    }
+
+    function syncCanvas() {
+      const w = Math.max(1, view.clientWidth);
+      const h = Math.max(1, view.clientHeight);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      draw();
+    }
+    view.onload = syncCanvas;
+    window.addEventListener("resize", () => { resetView(); syncCanvas(); });
+
+    stage.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const rect = stage.getBoundingClientRect();
+      zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX - rect.left, e.clientY - rect.top);
+    }, { passive: false });
+
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    canvas.addEventListener("mousedown", (e) => {
+      if (e.button === 1 || e.button === 2 || e.shiftKey) {
+        panning = true;
+        didPan = false;
+        panX = e.clientX;
+        panY = e.clientY;
+        e.preventDefault();
+      }
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!panning) return;
+      tx += e.clientX - panX;
+      ty += e.clientY - panY;
+      panX = e.clientX;
+      panY = e.clientY;
+      didPan = true;
+      applyView();
+    });
+    window.addEventListener("mouseup", () => { panning = false; });
+
+    canvas.addEventListener("click", (e) => {
+      if (didPan) { didPan = false; return; }
+      const pt = localPoint(e);
+      if (draft.length === 0) {
+        for (let i = spaces.length - 1; i >= 0; i--) {
+          if (pointInPoly(pt, spaces[i].points)) {
+            if (reviewMode) {
+              flipSpace(spaces[i].id);
+            } else {
+              selectSpace(spaces[i].id);
+            }
+            return;
+          }
+        }
+      }
+      if (draft.length >= 3) {
+        const first = toCanvas(draft[0]);
+        if (dist(pt, first) <= 16 / scale) {
+          closeSpace();
+          return;
+        }
+      }
+      draft.push(toNorm(pt));
+      setStatus("Puntuak: " + draft.length + ". Zoom gurpilarekin. Itxi plaza 3 edo gehiagorekin.");
+      draw();
+    });
+    canvas.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      closeSpace();
+    });
+    canvas.addEventListener("mousemove", (e) => {
+      if (panning) return;
+      cursor = localPoint(e);
+      draw();
+    });
+    canvas.addEventListener("mouseleave", () => { cursor = null; draw(); });
+
+    function localPoint(e) {
+      const r = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - r.left) * (canvas.width / Math.max(1, r.width)),
+        y: (e.clientY - r.top) * (canvas.height / Math.max(1, r.height))
+      };
+    }
+    function toNorm(pt) {
+      return { x: pt.x / canvas.width, y: pt.y / canvas.height };
+    }
+    function toCanvas(pt) {
+      return { x: pt.x * canvas.width, y: pt.y * canvas.height };
+    }
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function pointInPoly(pt, points) {
+      let inside = false;
+      for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+        const a = toCanvas(points[i]);
+        const b = toCanvas(points[j]);
+        const hit = ((a.y > pt.y) !== (b.y > pt.y)) &&
+          (pt.x < (b.x - a.x) * (pt.y - a.y) / ((b.y - a.y) || 1e-6) + a.x);
+        if (hit) inside = !inside;
+      }
+      return inside;
+    }
+
+    function markerSize() {
+      return {
+        line: Math.max(0.7, 2 / scale),
+        point: Math.max(1.1, 4.5 / scale),
+        font: Math.max(8, 14 / scale)
+      };
+    }
+
+    function drawPoly(points, closed, fill, stroke, { firstIsClose = false, selected = false } = {}) {
+      if (!points.length) return;
+      const size = markerSize();
+      ctx.beginPath();
+      const first = toCanvas(points[0]);
+      ctx.moveTo(first.x, first.y);
+      for (let i = 1; i < points.length; i++) {
+        const p = toCanvas(points[i]);
+        ctx.lineTo(p.x, p.y);
+      }
+      if (closed) ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (selected) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = size.line + 3 / scale;
+        ctx.stroke();
+      }
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = selected ? size.line + 1.2 / scale : size.line;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
+      points.forEach((p, i) => {
+        const c = toCanvas(p);
+        const radius = (firstIsClose && i === 0) ? size.point * 1.35 : size.point;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = (firstIsClose && i === 0) ? "#ffe08a" : "#fff";
+        ctx.fill();
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = size.line;
+        ctx.stroke();
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      spaces.forEach((s) => {
+        const busy = occupancy[s.id] === true;
+        const free = occupancy[s.id] === false;
+        const isSel = selected === s.id;
+        const hidden = overlayMode === "off" && !draft.length;
+        if (hidden && !isSel) return;
+        if (hidden && isSel) {
+          drawPoly(s.points, true, null, "rgba(255,255,255,0.55)", { selected: true });
+          return;
+        }
+        const hideFill = overlayMode !== "fill";
+        const fill = hideFill ? null : (busy ? "rgba(212,91,74,0.35)" : (free ? "rgba(60,175,111,0.35)" : "rgba(42,167,161,0.25)"));
+        const stroke = isSel ? "#ffffff" : (busy ? "#d45b4a" : (free ? "#3caf6f" : "#7ee0d8"));
+        drawPoly(s.points, true, fill, stroke, { selected: isSel });
+        const p = toCanvas(s.points[0]);
+        ctx.font = "bold " + markerSize().font + "px sans-serif";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(0,0,0,0.75)";
+        ctx.strokeText(s.id, p.x + 6 / scale, p.y - 8 / scale);
+        ctx.fillStyle = "white";
+        ctx.fillText(s.id, p.x + 6 / scale, p.y - 8 / scale);
+      });
+      if (draft.length) {
+        const live = draft.slice();
+        if (cursor) live.push(toNorm(cursor));
+        drawPoly(live, false, null, "#ffffff", { firstIsClose: draft.length >= 3 });
+      }
+    }
+
+    function closeSpace() {
+      if (draft.length < 3) {
+        setStatus("Plaza ixteko gutxienez 3 puntu behar dira.");
+        return;
+      }
+      const id = nextName();
+      spaces.push({ id, points: draft.slice() });
+      spacesDirty = true;
+      selected = id;
+      draft = [];
+      cursor = null;
+      renderSpaces();
+      updateInfo();
+      draw();
+      setStatus(id + " itxita. Klikatu plaza bat eta L/O, edo jarraitu marrazten.");
+      saveSpaces(true);
+    }
+
+    function undoPoint() {
+      if (draft.length) draft.pop();
+      else if (spaces.length) {
+        const last = spaces.pop();
+        spacesDirty = true;
+        draft = last.points.slice();
+      }
+      draw();
+      renderSpaces();
+      updateInfo();
+    }
+
+    function undoSpace() {
+      spaces.pop();
+      spacesDirty = true;
+      draft = [];
+      draw();
+      renderSpaces();
+      updateInfo();
+    }
+
+    async function saveSpaces(silent) {
+      try {
+        await api("/spaces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parking_id: parkingId(), spaces })
+        });
+        spacesDirty = false;
+        if (!silent) setStatus("Plazak gordeta. Klikatu plaza bat eta markatu libre/okupatuta.");
+      } catch (e) {
+        if (!silent) setStatus(e.message);
+      }
+    }
+
+    async function label(occupied, large) {
+      if (!selected) {
+        setStatus("Lehenik klikatu plaza bat irudian edo zerrendan.");
+        return;
+      }
+      if (reviewMode) {
+        occupancy[selected] = occupied;
+        renderSpaces();
+        updateInfo();
+        draw();
+        setStatus(selected + " zuzenduta → " + (occupied ? "OKUPATUTA" : "LIBRE") + (large ? " (kotxe handia)" : "") + ". Gero 'Irudi hau zuzena da'.");
+        return;
+      }
+      if (labeling) return;
+      labeling = true;
+      overrides[selected] = occupied;
+      occupancy[selected] = occupied;
+      renderSpaces();
+      updateInfo();
+      draw();
+      const marked = selected;
+      setStatus(marked + " → " + (occupied ? "OKUPATUTA" : "LIBRE"));
+      try {
+        if (spacesDirty) await saveSpaces(true);
+        const data = await api("/label", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parking_id: parkingId(), space_id: marked, occupied, large_vehicle: !!large })
+        });
+        samplesFree = data.samples_free ?? samplesFree;
+        samplesOccupied = data.samples_occupied ?? samplesOccupied;
+        modelTrained = data.model_trained === true;
+        if (data.accuracy != null) modelAccuracy = data.accuracy;
+        if (data.spaces) occupancy = { ...occupancy, ...data.spaces };
+        (data.covered || []).forEach((id) => { occupancy[id] = true; overrides[id] = true; });
+        renderSpaces();
+        updateInfo();
+        draw();
+        applyLearnNotice(data, marked + " zuzenketa gordeta.");
+      } catch (e) {
+        setStatus("Ez da gorde: " + e.message);
+      } finally {
+        labeling = false;
+      }
+    }
+
+    async function startReview() {
+      const data = await api("/dataset/pending?parking_id=" + encodeURIComponent(parkingId()));
+      pending = data.frames || [];
+      pendingIndex = 0;
+      if (!pending.length) {
+        setStatus("Bufferrean ez dago berrikusteko irudirik. Sistema bakarrik hartzen ditu, tarteka.");
+        return;
+      }
+      reviewMode = true;
+      loadPending();
+    }
+
+    function loadPending() {
+      if (!pending.length) {
+        reviewMode = false;
+        startLive();
+        setStatus("Berrikusketak amaituta.");
+        return;
+      }
+      const frame = pending[pendingIndex] || pending[0];
+      view.src = "";
+      occupancy = fillOccupancy(frame.spaces || frame.yolo_spaces || {});
+      overrides = {};
+      authImage(view, "/dataset/image?parking_id=" + encodeURIComponent(parkingId()) + "&frame_id=" + encodeURIComponent(frame.id));
+      renderSpaces();
+      updateInfo();
+      draw();
+      setStatus("Berrikuspena " + (pendingIndex + 1) + "/" + pending.length + ". Akatsa duen plaza klikatu. Gero 'Irudi hau zuzena da'.");
+    }
+
+    function flipSpace(id) {
+      occupancy[id] = occupancy[id] !== true;
+      selected = id;
+      renderSpaces();
+      updateInfo();
+      draw();
+      setStatus(id + " zuzenduta → " + (occupancy[id] ? "OKUPATUTA" : "LIBRE"));
+    }
+
+    async function confirmFrame() {
+      if (!reviewMode || !pending.length) {
+        setStatus("Ez zaude berrikuspenean.");
+        return;
+      }
+      const frame = pending[pendingIndex];
+      try {
+        occupancy = fillOccupancy(occupancy);
+        const data = await api("/dataset/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ parking_id: parkingId(), frame_id: frame.id, spaces: occupancy })
+        });
+        applyLearnNotice(data, "Irudia gordeta entrenamendurako.");
+        pending.splice(pendingIndex, 1);
+        if (pendingIndex >= pending.length) pendingIndex = Math.max(0, pending.length - 1);
+        loadPending();
+      } catch (e) {
+        applyLearnNotice({ message: e.message, kind: "bad" }, e.message);
+      }
+    }
+
+    function nextPending() {
+      if (!pending.length) return;
+      pendingIndex = (pendingIndex + 1) % pending.length;
+      loadPending();
+    }
+
+    function planCells(rows, cols, source) {
+      const cells = [];
+      for (let r = 0; r < rows; r++) {
+        const line = [];
+        for (let c = 0; c < cols; c++) {
+          line.push((source[r] && source[r][c]) || "");
+        }
+        cells.push(line);
+      }
+      return cells;
+    }
+
+    function placedIds() {
+      const ids = new Set();
+      (userView.cells || []).forEach((row) => row.forEach((id) => { if (isSpaceId(id)) ids.add(id); }));
+      return ids;
+    }
+
+    function addPaletteChip(box, label, value) {
+      const el = document.createElement("div");
+      el.className = "space" + (paintId === value ? " paint" : "");
+      el.textContent = label;
+      el.onclick = () => {
+        paintId = value;
+        document.getElementById("planHint").textContent =
+          value === "~row" ? "Klikatu errenkadan tartea irekitzeko. Pasabidean klik: kendu."
+          : value === "~col" ? "Klikatu zutabean tartea irekitzeko. Pasabidean klik: kendu."
+          : "Klikatu gelaxka plaza hori jartzeko.";
+        renderPalette();
+      };
+      box.appendChild(el);
+    }
+
+    function renderPalette() {
+      const box = document.getElementById("planPalette");
+      if (!box) return;
+      const used = placedIds();
+      box.innerHTML = "";
+      addPaletteChip(box, "Pasabidea ↔", "~row");
+      addPaletteChip(box, "Pasabidea ↕", "~col");
+      spaces.forEach((s) => {
+        const el = document.createElement("div");
+        el.className = "space" + (paintId === s.id ? " paint" : "") + (used.has(s.id) ? " placed" : "");
+        el.textContent = s.id;
+        el.onclick = () => {
+          paintId = s.id;
+          document.getElementById("planHint").textContent = s.id + " hautatuta. Klikatu gelaxka.";
+          renderPalette();
+        };
+        box.appendChild(el);
+      });
+    }
+
+    function renderPlanGrid() {
+      const grid = document.getElementById("planGrid");
+      if (!grid) return;
+      const rows = userView.rows || 0;
+      const cols = userView.cols || 0;
+      const cells = userView.cells || [];
+      const colTracks = [];
+      for (let c = 0; c < cols; c++) {
+        const lane = cells.length && cells.every((row) => isAisle(row[c]));
+        colTracks.push(lane ? "minmax(16px, 0.35fr)" : "minmax(28px, 1fr)");
+      }
+      grid.style.gridTemplateColumns = colTracks.join(" ") || "1fr";
+      const rowTracks = cells.map((row) =>
+        row.length && row.every(isAisle) ? "minmax(16px, 0.35fr)" : "minmax(28px, 1fr)"
+      );
+      grid.style.gridTemplateRows = rowTracks.join(" ");
+      grid.innerHTML = "";
+      if (!rows || !cols) {
+        grid.innerHTML = "<p class='status'>Errenkadak eta zutabeak jarri, gero matrizea sortu.</p>";
+        return;
+      }
+      cells.forEach((row, r) => {
+        row.forEach((id, c) => {
+          const cell = document.createElement("div");
+          if (isAisle(id)) {
+            cell.className = "cell aisle";
+            cell.textContent = "☰";
+            cell.title = "Pasabidea · klikatu kentzeko";
+          } else if (id) {
+            cell.className = "cell used";
+            cell.textContent = id;
+          } else {
+            cell.className = "cell empty";
+            cell.textContent = "·";
+          }
+          cell.onclick = () => paintCell(r, c);
+          grid.appendChild(cell);
+        });
+      });
+      const used = placedIds().size;
+      document.getElementById("planStatus").textContent =
+        rows + " × " + cols + " · " + used + "/" + spaces.length + " plaza kokatuta";
+    }
+
+    function rowIsAisle(r) {
+      const row = userView.cells[r] || [];
+      return row.length > 0 && row.every(isAisle);
+    }
+
+    function colIsAisle(c) {
+      return userView.cells.length > 0 && userView.cells.every((row) => isAisle(row[c]));
+    }
+
+    function removeAisleRow(r) {
+      if (userView.rows <= 1) {
+        document.getElementById("planStatus").textContent = "Ezin da azken errenkada kendu.";
+        return false;
+      }
+      if (!rowIsAisle(r)) return false;
+      userView.cells.splice(r, 1);
+      userView.rows = userView.cells.length;
+      document.getElementById("planRows").value = userView.rows;
+      return true;
+    }
+
+    function removeAisleCol(c) {
+      if (userView.cols <= 1) {
+        document.getElementById("planStatus").textContent = "Ezin da azken zutabea kendu.";
+        return false;
+      }
+      if (!colIsAisle(c)) return false;
+      userView.cells.forEach((row) => row.splice(c, 1));
+      userView.cols = userView.cells[0] ? userView.cells[0].length : 0;
+      document.getElementById("planCols").value = userView.cols;
+      return true;
+    }
+
+    function insertAisleRow(r) {
+      if (userView.rows >= 20) {
+        document.getElementById("planStatus").textContent = "Gehienez 20 errenkada.";
+        return;
+      }
+      const cols = userView.cols;
+      userView.cells.splice(r, 0, Array.from({ length: cols }, () => AISLE));
+      userView.rows += 1;
+      document.getElementById("planRows").value = userView.rows;
+    }
+
+    function insertAisleCol(c) {
+      if (userView.cols >= 20) {
+        document.getElementById("planStatus").textContent = "Gehienez 20 zutabe.";
+        return;
+      }
+      userView.cells.forEach((row) => row.splice(c, 0, AISLE));
+      userView.cols += 1;
+      document.getElementById("planCols").value = userView.cols;
+    }
+
+    function paintCell(r, c) {
+      if (!userView.cells[r]) return;
+      if (isAisle(userView.cells[r][c]) && (rowIsAisle(r) || colIsAisle(c))) {
+        if (rowIsAisle(r) && (paintId !== "~col" || !colIsAisle(c))) {
+          removeAisleRow(r);
+        } else if (colIsAisle(c)) {
+          removeAisleCol(c);
+        } else {
+          userView.cells[r][c] = "";
+        }
+        renderPalette();
+        renderPlanGrid();
+        document.getElementById("planHint").textContent = "Pasabidea kenduta. Gorde bista.";
+        return;
+      }
+      if (paintId === "~row") {
+        insertAisleRow(r);
+      } else if (paintId === "~col") {
+        insertAisleCol(c);
+      } else if (paintId) {
+        userView.cells.forEach((row, rr) => {
+          row.forEach((id, cc) => {
+            if (id === paintId) userView.cells[rr][cc] = "";
+          });
+        });
+        userView.cells[r][c] = userView.cells[r][c] === paintId ? "" : paintId;
+      } else {
+        document.getElementById("planHint").textContent = "Hautatu plaza bat edo pasabidea lehenik.";
+        return;
+      }
+      renderPalette();
+      renderPlanGrid();
+    }
+
+    function resizePlan() {
+      const rows = Math.max(1, Math.min(20, parseInt(document.getElementById("planRows").value, 10) || 1));
+      const cols = Math.max(1, Math.min(20, parseInt(document.getElementById("planCols").value, 10) || 1));
+      userView.rows = rows;
+      userView.cols = cols;
+      userView.cells = planCells(rows, cols, userView.cells || []);
+      renderPalette();
+      renderPlanGrid();
+    }
+
+    function autoFillPlan() {
+      if (!spaces.length) {
+        document.getElementById("planStatus").textContent = "Lehenik marraztu plazak kameran.";
+        return;
+      }
+      resizePlan();
+      let i = 0;
+      userView.cells = userView.cells.map((row) => row.map(() => {
+        const space = spaces[i++];
+        return space ? space.id : "";
+      }));
+      renderPalette();
+      renderPlanGrid();
+    }
+
+    async function loadPlan() {
+      try {
+        const data = await api("/plan?parking_id=" + encodeURIComponent(parkingId()));
+        if (data.defined && data.rows && data.cols) {
+          userView = { rows: data.rows, cols: data.cols, cells: planCells(data.rows, data.cols, data.cells || []) };
+          document.getElementById("planRows").value = data.rows;
+          document.getElementById("planCols").value = data.cols;
+        } else {
+          const n = Math.max(1, spaces.length);
+          const cols = Math.min(6, Math.max(2, n));
+          const rows = Math.max(1, Math.ceil(n / cols));
+          userView = { rows, cols, cells: planCells(rows, cols, []) };
+          document.getElementById("planRows").value = rows;
+          document.getElementById("planCols").value = cols;
+        }
+        paintId = spaces[0] ? spaces[0].id : "";
+        renderPalette();
+        renderPlanGrid();
+      } catch (e) {
+        document.getElementById("planStatus").textContent = e.message;
+      }
+    }
+
+    async function savePlan() {
+      try {
+        resizePlan();
+        await api("/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            parking_id: parkingId(),
+            rows: userView.rows,
+            cols: userView.cols,
+            cells: userView.cells
+          })
+        });
+        document.getElementById("planStatus").textContent = "Erabiltzaile-bista gordeta. Egoera-orrian agertuko da.";
+      } catch (e) {
+        document.getElementById("planStatus").textContent = e.message;
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.key === "l" || e.key === "L") { e.preventDefault(); label(false); }
+      if (e.key === "o" || e.key === "O") { e.preventDefault(); label(true); }
+      if (e.key === "p" || e.key === "P") { e.preventDefault(); cycleOverlay(); }
+    });
+
+    setInterval(() => {
+      if (!connected || reviewMode) return;
+      poll();
+    }, 500);
+
+    async function restoreParking() {
+      try {
+        const me = await api("/auth/me");
+        setCurrentUser(me.user);
+      } catch (e) {
+        location.href = "/";
+        return;
+      }
+      const params = new URLSearchParams(location.search);
+      if (params.get("parking_id")) {
+        document.getElementById("parkingId").value = params.get("parking_id");
+      }
+      if (!parkingId()) return;
+      const toStatus = document.getElementById("toStatus");
+      if (toStatus) toStatus.href = "/egoera?parking_id=" + encodeURIComponent(parkingId());
+      const toTrain = document.getElementById("toTrain");
+      if (toTrain) toTrain.href = "/entrenatu?parking_id=" + encodeURIComponent(parkingId());
+      const toReliability = document.getElementById("toReliability");
+      if (toReliability) toReliability.href = "/fidagarritasuna?parking_id=" + encodeURIComponent(parkingId());
+      try {
+        const data = await api("/parking?parking_id=" + encodeURIComponent(parkingId()));
+        if (!canEditParking(data)) {
+          location.href = "/egoera?parking_id=" + encodeURIComponent(parkingId());
+          return;
+        }
+        if (data.camera_url) document.getElementById("cameraUrl").value = data.camera_url;
+        if (data.name) document.getElementById("parkingName").value = data.name;
+        spaces = data.spaces || [];
+        occupancy = data.occupancy || {};
+        samplesFree = data.samples_free || 0;
+        samplesOccupied = data.samples_occupied || 0;
+        modelTrained = data.model_trained === true;
+        const pathEl = document.getElementById("dataPath");
+        if (pathEl && data.data_path) pathEl.textContent = data.data_path;
+        renderSpaces();
+        updateInfo();
+        draw();
+        await loadPlan();
+        await api("/register", {
+          method: "POST",
+          body: JSON.stringify({
+            parking_id: parkingId(),
+            camera_url: cameraUrl(),
+            name: document.getElementById("parkingName").value.trim()
+          })
+        });
+        connected = true;
+        refreshImage();
+        await poll();
+        setStatus("Gordetako aparkalekua kargatuta" + (spaces.length ? ": " + spaces.length + " plaza." : ". Marraztu plazak behin, eta gordeta geratuko dira."));
+      } catch (e) {
+        setStatus(e.message);
+      }
+    }
+
+    restoreParking();
+    syncOverlayButton();
+    const overlayBtn = document.getElementById("btnOverlay");
+    if (overlayBtn) overlayBtn.onclick = cycleOverlay;
+  </script>
+</body>
+</html>

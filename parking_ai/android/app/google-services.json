@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "513791791890",
+    "project_id": "parkingia-b8bf6",
+    "storage_bucket": "parkingia-b8bf6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:513791791890:android:9484fce010793b8d3b99cb",
+        "android_client_info": {
+          "package_name": "com.example.parking_ai"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC8FOKuyenRYW5Xtxse75Y4Mw8nCB8SfII"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
